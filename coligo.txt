@@ -1,2 +1,2 @@
-Version = "1.31.1.0"
-URL = "https://desktop.coligo.com/binaries/cdc/1.31.1/Coligo.msi"
+Version = "1.30.2"
+URL = "https://desktop.coligo.com/binaries/cdc/1.30.2/ColigoSetup.exe"
