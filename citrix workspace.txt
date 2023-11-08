@@ -1,2 +1,2 @@
-Version = "21.5.0.22"
+Version = "21.4.0.10"
 URL = "https://portal.werkplekstandby.nl/Citrix/defaultWeb/clients/Windows/CitrixWorkspaceApp.exe"
