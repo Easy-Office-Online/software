@@ -1,0 +1,2 @@
+Version = "2.1.53"
+URL = "https://desktop.coligo.com/binaries/coligoconnect/ColigoConnectConfigurationSetup.exe"
