@@ -1,2 +1,2 @@
 Version = "2.1.53"
-URL = "https://desktop.coligo.com/binaries/coligoconnect/ColigoConnectConfigurationSetup.exe"
+URL = "https://downloadcloudcti.blob.core.windows.net/files/setups/coligoconnectconfigurationsetup.exe"
