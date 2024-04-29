@@ -1,2 +1,0 @@
-Version = "2.12.4"
-URL = "https://github.com/Easy-Office-Online/software/raw/main/ZorgMail%20Veilig%20verzenden%20-%20Enovation%20Mail%20Send%20Secure%20Viewer%2006-controle%20-%20User.msi"
