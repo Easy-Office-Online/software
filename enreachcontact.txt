@@ -1,2 +1,2 @@
-Version = "1.34.10"
-URL = "https://desktop.coligo.com/binaries/cdc_enreach/1.34.10/EnreachContact.msi"
+Version = "1.35.8"
+URL = "https://desktop.coligo.com/binaries/cdc/1.35.8/Coligo.msi"
