@@ -1,2 +1,2 @@
-Version = "5.3.2.537"
-URL = "https://hpia.hpcloud.hp.com/downloads/hpia/hp-hpia-5.3.2.exe"
+Version = "5.3.3.547"
+URL = "https://hpia.hpcloud.hp.com/downloads/hpia/hp-hpia-5.3.3.exe"
