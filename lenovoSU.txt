@@ -1,0 +1,2 @@
+Version = "5.8.3.59"
+URL = "https://download.lenovo.com/pccbbs/thinkvantage_en/system_update_5.08.03.59.exe"

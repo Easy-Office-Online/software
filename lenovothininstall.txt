@@ -1,2 +1,0 @@
-Version = "1.4.2.24"
-URL = "https://download.lenovo.com/pccbbs/thinkvantage_en/lenovo_thininstaller_1.04.02.00024.exe"
