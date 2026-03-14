@@ -2,6 +2,7 @@
 # EOO-Deploy.ps1 — OSDCloud automation script
 # HP: HPIA | Lenovo: DriverPack auto | Dell: DriverPack auto
 # Altijd: Windows 11 Pro NL | 1 partitie | HWID + GroupTag
+# Made by The High Wizard of systems & Sorcery
 #============================================================
 
 # ── STAP 1: Windows installeren ──────────────────────────
