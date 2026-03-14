@@ -37,7 +37,7 @@ $AutopilotOOBEJson = @'
     "GroupTag": "",
     "GroupTagOptions": [
         "EOO-Standard",
-        "EOO-Shared",
+        "EOO-Flex",
         "EOO-Kiosk"
     ],
     "Hidden": [
