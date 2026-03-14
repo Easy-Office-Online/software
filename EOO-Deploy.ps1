@@ -14,6 +14,7 @@ $Params = @{
     SkipAutopilot = $true
     SkipODT       = $true
     ZTI           = $true
+    Restart       = $true
 }
 Start-OSDCloud @Params
  
