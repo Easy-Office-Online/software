@@ -7,7 +7,7 @@
  
 # ── STAP 1: Windows installeren ──────────────────────────
 $Params = @{
-    OSName        = 'Windows 11 24H2 x64'
+    OSName        = 'Windows 11 25H2 x64'
     OSEdition     = 'Pro'
     OSLanguage    = 'nl-nl'
     OSLicense     = 'Retail'
