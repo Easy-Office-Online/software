@@ -7,7 +7,7 @@
 
 #region OS VARS
 $OSName       = 'Windows 11 25H2 x64'
-$OSEdition    = 'Enterprise'
+$OSEdition    = 'Pro'
 $OSActivation = 'Retail'
 $OSLanguage   = 'nl-nl'
 #endregion
@@ -83,7 +83,6 @@ $ODTConfig = @"
       <Language ID="nl-nl" />
       <ExcludeApp ID="Groove" />
       <ExcludeApp ID="Lync" />
-      <ExcludeApp ID="Teams" />
     </Product>
   </Add>
   <Updates Enabled="TRUE" Channel="MonthlyEnterprise" />
