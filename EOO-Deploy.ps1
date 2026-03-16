@@ -8,7 +8,7 @@
 #region OS VARS
 $OSName       = 'Windows 11 25H2 x64'
 $OSEdition    = 'Enterprise'
-$OSActivation = 'Volume'
+$OSActivation = 'Retail'
 $OSLanguage   = 'nl-nl'
 #endregion
 
