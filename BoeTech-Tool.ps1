@@ -268,10 +268,10 @@ $timer.Add_Tick({
         $script:lblTimer.Text = "FIREWALL UITGESCHAKELD - HERSTART OVER: $ms`:$ss"
     }
     if ($script:fwSecondsLeft -le 0 -and $script:pnlTimer.Visible) {
-        Start-Process "cmd.exe" -ArgumentList "/c netsh advfirewall set allprofiles state on" -WindowStyle Hidden -Wait
+        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True`"" -Verb RunAs -WindowStyle Hidden -Wait
         $script:pnlTimer.Visible = $false
         $script:fwSecondsLeft = 0
-        Set-Log "Firewall automatisch terugaan na 30 minuten."
+        Set-Log "Firewall automatisch terugaan."
     }
 })
 $timer.Start()
@@ -307,17 +307,25 @@ $btnMakeAdmin.Add_Click({
 })
 
 $btnFwOff.Add_Click({
-    Start-Process "cmd.exe" -ArgumentList "/c netsh advfirewall set allprofiles state off" -WindowStyle Hidden -Wait
-    $script:fwSecondsLeft = 1800
-    $script:pnlTimer.Visible = $true
-    Set-Log "Firewall uitgeschakeld. Timer: 30 min."
+    try {
+        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False`"" -Verb RunAs -WindowStyle Hidden -Wait
+        $script:fwSecondsLeft = 120
+        $script:pnlTimer.Visible = $true
+        Set-Log "Firewall uitgeschakeld. Timer: 2 min."
+    } catch {
+        Set-Log "Fout: toegang geweigerd. Start tool als admin."
+    }
 })
 
 $btnFwOn.Add_Click({
-    Start-Process "cmd.exe" -ArgumentList "/c netsh advfirewall set allprofiles state on" -WindowStyle Hidden -Wait
-    $script:fwSecondsLeft = 0
-    $script:pnlTimer.Visible = $false
-    Set-Log "Firewall ingeschakeld."
+    try {
+        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True`"" -Verb RunAs -WindowStyle Hidden -Wait
+        $script:fwSecondsLeft = 0
+        $script:pnlTimer.Visible = $false
+        Set-Log "Firewall ingeschakeld."
+    } catch {
+        Set-Log "Fout: toegang geweigerd. Start tool als admin."
+    }
 })
 
 $btnNetwork.Add_Click({
