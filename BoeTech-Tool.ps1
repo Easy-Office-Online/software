@@ -268,10 +268,11 @@ $timer.Add_Tick({
         $script:lblTimer.Text = "FIREWALL UITGESCHAKELD - HERSTART OVER: $ms`:$ss"
     }
     if ($script:fwSecondsLeft -le 0 -and $script:pnlTimer.Visible) {
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True`"" -Verb RunAs -WindowStyle Hidden -Wait
+        $cmd = "Remove-NetFirewallRule -DisplayName 'BOETECH-ALLOW-ALL-IN'  -ErrorAction SilentlyContinue; Remove-NetFirewallRule -DisplayName 'BOETECH-ALLOW-ALL-OUT' -ErrorAction SilentlyContinue"
+        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`"" -Verb RunAs -WindowStyle Hidden -Wait
         $script:pnlTimer.Visible = $false
         $script:fwSecondsLeft = 0
-        Set-Log "Firewall automatisch terugaan."
+        Set-Log "Allow-all regels automatisch verwijderd."
     }
 })
 $timer.Start()
@@ -308,21 +309,26 @@ $btnMakeAdmin.Add_Click({
 
 $btnFwOff.Add_Click({
     try {
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False`"" -Verb RunAs -WindowStyle Hidden -Wait
-        $script:fwSecondsLeft = 120
+        $cmd = @"
+New-NetFirewallRule -DisplayName 'BOETECH-ALLOW-ALL-IN'  -Direction Inbound  -Action Allow -Protocol Any -Profile Any -ErrorAction SilentlyContinue | Out-Null
+New-NetFirewallRule -DisplayName 'BOETECH-ALLOW-ALL-OUT' -Direction Outbound -Action Allow -Protocol Any -Profile Any -ErrorAction SilentlyContinue | Out-Null
+"@
+        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`"" -Verb RunAs -WindowStyle Hidden -Wait
+        $script:fwSecondsLeft = 1800
         $script:pnlTimer.Visible = $true
-        Set-Log "Firewall uitgeschakeld. Timer: 2 min."
+        Set-Log "Allow-all regels toegevoegd. Timer: 30 min."
     } catch {
-        Set-Log "Fout: toegang geweigerd. Start tool als admin."
+        Set-Log "Fout: $_"
     }
 })
 
 $btnFwOn.Add_Click({
     try {
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True`"" -Verb RunAs -WindowStyle Hidden -Wait
+        $cmd = "Remove-NetFirewallRule -DisplayName 'BOETECH-ALLOW-ALL-IN'  -ErrorAction SilentlyContinue; Remove-NetFirewallRule -DisplayName 'BOETECH-ALLOW-ALL-OUT' -ErrorAction SilentlyContinue"
+        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`"" -Verb RunAs -WindowStyle Hidden -Wait
         $script:fwSecondsLeft = 0
         $script:pnlTimer.Visible = $false
-        Set-Log "Firewall ingeschakeld."
+        Set-Log "Allow-all regels verwijderd."
     } catch {
         Set-Log "Fout: toegang geweigerd. Start tool als admin."
     }
