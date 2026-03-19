@@ -17,14 +17,30 @@ $RED    = [System.Drawing.ColorTranslator]::FromHtml("#ff3333")
 $GREEN  = [System.Drawing.ColorTranslator]::FromHtml("#44cc66")
 $DARK   = [System.Drawing.ColorTranslator]::FromHtml("#0a0a0a")
 
-$FontMain  = New-Object System.Drawing.Font("Segoe UI", 9)
-$FontSmall = New-Object System.Drawing.Font("Segoe UI", 7)
-$FontTitle = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
-$FontSect  = New-Object System.Drawing.Font("Segoe UI", 7, [System.Drawing.FontStyle]::Bold)
+$FontMain  = New-Object System.Drawing.Font("Segoe UI", 10)
+$FontSmall = New-Object System.Drawing.Font("Segoe UI", 8)
+$FontTitle = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+$FontSect  = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
 
 function Set-Log($msg) {
     $script:lblLog.Text = $msg
     $script:form.Refresh()
+}
+
+# Start het script opnieuw als Administrator via een VBScript,
+# zodat er geen zwart PS-consolevenster verschijnt.
+function Start-ElevatedScript {
+    param([string]$Path)
+    $vbs = [System.IO.Path]::ChangeExtension([System.IO.Path]::GetTempFileName(), '.vbs')
+    $content = @"
+CreateObject("Shell.Application").ShellExecute "powershell.exe", _
+    "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & "$Path" & Chr(34), _
+    "", "runas", 1
+"@
+    [System.IO.File]::WriteAllText($vbs, $content, [System.Text.Encoding]::ASCII)
+    # Asynchroon starten — geen -Wait zodat de UI-thread niet blokkeert.
+    # VBS-bestand blijft in %TEMP% staan; Windows ruimt dit periodiek op.
+    Start-Process "wscript.exe" -ArgumentList "`"$vbs`"" -WindowStyle Hidden
 }
 
 # Maak een knop die z'n eigen tekst tekent via Paint
@@ -52,16 +68,30 @@ function New-FlatBtn($mainText, $subText, $x, $y, $w, $h) {
         $g = $e.Graphics
         $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 
-        $fMain  = New-Object System.Drawing.Font("Segoe UI", 9)
-        $fSub   = New-Object System.Drawing.Font("Segoe UI", 7)
+        $fMain  = New-Object System.Drawing.Font("Segoe UI", 10)
+        $fSub   = New-Object System.Drawing.Font("Segoe UI", 8)
         $bMain  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
         $bSub   = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#aaaaaa"))
 
-        $g.DrawString($main, $fMain, $bMain, 12, 9)
-        $g.DrawString($sub,  $fSub,  $bSub,  13, 28)
+        $avail  = $sender.Width - 24   # beschikbare breedte minus linker- en rechtermarge
+
+        # Hoofdtekst – één regel, ellipsis bij overflow
+        $sfMain = New-Object System.Drawing.StringFormat
+        $sfMain.Trimming    = [System.Drawing.StringTrimming]::EllipsisCharacter
+        $sfMain.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
+        $rectMain = New-Object System.Drawing.RectangleF(12, 10, $avail, 20)
+        $g.DrawString($main, $fMain, $bMain, $rectMain, $sfMain)
+
+        # Subtekst – één regel, ellipsis bij overflow, 6px onder hoofdtekst
+        $sfSub = New-Object System.Drawing.StringFormat
+        $sfSub.Trimming    = [System.Drawing.StringTrimming]::EllipsisCharacter
+        $sfSub.FormatFlags = [System.Drawing.StringFormatFlags]::NoWrap
+        $rectSub = New-Object System.Drawing.RectangleF(13, 33, $avail, 16)
+        $g.DrawString($sub, $fSub, $bSub, $rectSub, $sfSub)
 
         $fMain.Dispose(); $fSub.Dispose()
         $bMain.Dispose(); $bSub.Dispose()
+        $sfMain.Dispose(); $sfSub.Dispose()
     })
 
     return $btn
@@ -74,7 +104,7 @@ function Add-SectLabel($text, $y) {
     $l.ForeColor = $ORANGE
     $l.BackColor = $BG
     $l.Location  = New-Object System.Drawing.Point(20, $y)
-    $l.Size      = New-Object System.Drawing.Size(560, 16)
+    $l.Size      = New-Object System.Drawing.Size(560, 18)
     $script:form.Controls.Add($l)
 }
 
@@ -89,7 +119,7 @@ function Add-Divider($y) {
 # Hoofdvenster
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "Lely IT Tool"
-$form.Size            = New-Object System.Drawing.Size(622, 430)
+$form.Size            = New-Object System.Drawing.Size(622, 472)
 $form.MinimumSize     = $form.Size
 $form.MaximumSize     = $form.Size
 $form.BackColor       = $BG
@@ -100,144 +130,49 @@ $form.StartPosition   = [System.Windows.Forms.FormStartPosition]::CenterScreen
 # Header panel
 $pnlHeader = New-Object System.Windows.Forms.Panel
 $pnlHeader.Location  = New-Object System.Drawing.Point(0, 0)
-$pnlHeader.Size      = New-Object System.Drawing.Size(622, 68)
+$pnlHeader.Size      = New-Object System.Drawing.Size(622, 80)
 $pnlHeader.BackColor = $PANEL
 $pnlHeader.Add_Paint({
     param($s,$e)
     $pen = New-Object System.Drawing.Pen($ORANGE, 3)
-    $e.Graphics.DrawLine($pen, 0, 65, $s.Width, 65)
+    $e.Graphics.DrawLine($pen, 0, 77, $s.Width, 77)
     $pen.Dispose()
 })
 
-# Lely oval logo - nauwkeurige GDI+ nabootsing
+# Lely oval logo
 $picCow = New-Object System.Windows.Forms.PictureBox
-$picCow.Location  = New-Object System.Drawing.Point(8, 4)
-$picCow.Size      = New-Object System.Drawing.Size(76, 60)
+$picCow.Location  = New-Object System.Drawing.Point(6, 3)
+$picCow.Size      = New-Object System.Drawing.Size(96, 62)
 $picCow.BackColor = $PANEL
 $picCow.Add_Paint({
     param($s,$e)
     $g = $e.Graphics
-    $g.SmoothingMode    = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
 
-    # Zwarte buitenste ellips (achtergrond schaduw effect)
+    # Schaduw
     $brushBlack = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
-    $g.FillEllipse($brushBlack, 0, 0, 76, 58)
+    $g.FillEllipse($brushBlack, 2, 2, 92, 60)
 
-    # Dikke witte rand-ellips
+    # Witte rand
     $brushWhite = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $g.FillEllipse($brushWhite, 2, 2, 72, 54)
-
-    # Dunne rode ring (binnenrand)
-    $brushRed = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#CC0000"))
-    $g.FillEllipse($brushRed, 6, 5, 64, 48)
-
-    # Tweede witte dunne ring
-    $brushWhite2 = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $g.FillEllipse($brushWhite2, 8, 7, 60, 44)
+    $g.FillEllipse($brushWhite, 0, 0, 92, 60)
 
     # Rode kern
-    $brushRed2 = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#CC0000"))
-    $g.FillEllipse($brushRed2, 10, 9, 56, 40)
+    $brushRed = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#CC0000"))
+    $g.FillEllipse($brushRed, 4, 4, 84, 52)
 
-    # LELY letters met trapezium-perspectief via GraphicsPath
-    # Elke letter heeft een smalle bovenkant en brede onderkant (karakteristiek Lely font)
+    # LELY tekst gecentreerd
+    $fLely  = New-Object System.Drawing.Font("Impact", 24, [System.Drawing.FontStyle]::Regular)
     $brushW = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-
-    # Letter L  (x=11, breed=9)
-    $pathL = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathL.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(11,  12),   # links boven
-        [System.Drawing.PointF]::new(15,  12),   # rechts boven
-        [System.Drawing.PointF]::new(16,  45),   # rechts onder (schacht)
-        [System.Drawing.PointF]::new(22,  45),   # voet rechts
-        [System.Drawing.PointF]::new(22,  49),   # voet rechts onder
-        [System.Drawing.PointF]::new(10,  49),   # voet links onder
-        [System.Drawing.PointF]::new(10,  12)    # links boven (sluit)
-    ))
-    $g.FillPath($brushW, $pathL)
-
-    # Letter E  (x=23)
-    $pathE = New-Object System.Drawing.Drawing2D.GraphicsPath
-    # Schacht
-    $pathE.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(23, 12),
-        [System.Drawing.PointF]::new(27, 12),
-        [System.Drawing.PointF]::new(28, 49),
-        [System.Drawing.PointF]::new(23, 49)
-    ))
-    $g.FillPath($brushW, $pathE)
-    # Balk boven
-    $pathEt = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathEt.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(23, 12),
-        [System.Drawing.PointF]::new(33, 12),
-        [System.Drawing.PointF]::new(33, 16),
-        [System.Drawing.PointF]::new(23, 16)
-    ))
-    $g.FillPath($brushW, $pathEt)
-    # Middenbalk
-    $pathEm = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathEm.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(24, 28),
-        [System.Drawing.PointF]::new(32, 28),
-        [System.Drawing.PointF]::new(32, 32),
-        [System.Drawing.PointF]::new(24, 32)
-    ))
-    $g.FillPath($brushW, $pathEm)
-    # Onderbalk
-    $pathEb = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathEb.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(23, 45),
-        [System.Drawing.PointF]::new(34, 45),
-        [System.Drawing.PointF]::new(34, 49),
-        [System.Drawing.PointF]::new(23, 49)
-    ))
-    $g.FillPath($brushW, $pathEb)
-
-    # Letter L2  (x=36)
-    $pathL2 = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathL2.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(36, 12),
-        [System.Drawing.PointF]::new(40, 12),
-        [System.Drawing.PointF]::new(41, 45),
-        [System.Drawing.PointF]::new(47, 45),
-        [System.Drawing.PointF]::new(47, 49),
-        [System.Drawing.PointF]::new(35, 49),
-        [System.Drawing.PointF]::new(35, 12)
-    ))
-    $g.FillPath($brushW, $pathL2)
-
-    # Letter Y  (x=49)
-    $pathYl = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathYl.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(49, 12),
-        [System.Drawing.PointF]::new(53, 12),
-        [System.Drawing.PointF]::new(55, 30),
-        [System.Drawing.PointF]::new(51, 30)
-    ))
-    $g.FillPath($brushW, $pathYl)
-    $pathYr = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathYr.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(59, 12),
-        [System.Drawing.PointF]::new(64, 12),
-        [System.Drawing.PointF]::new(57, 30),
-        [System.Drawing.PointF]::new(53, 30)
-    ))
-    $g.FillPath($brushW, $pathYr)
-    $pathYs = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $pathYs.AddPolygon([System.Drawing.PointF[]](
-        [System.Drawing.PointF]::new(52, 30),
-        [System.Drawing.PointF]::new(56, 30),
-        [System.Drawing.PointF]::new(57, 49),
-        [System.Drawing.PointF]::new(52, 49)
-    ))
-    $g.FillPath($brushW, $pathYs)
+    $sf     = New-Object System.Drawing.StringFormat
+    $sf.Alignment     = [System.Drawing.StringAlignment]::Center
+    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+    $rect = New-Object System.Drawing.RectangleF(4, 4, 84, 52)
+    $g.DrawString("LELY", $fLely, $brushW, $rect, $sf)
 
     $brushBlack.Dispose(); $brushWhite.Dispose(); $brushRed.Dispose()
-    $brushWhite2.Dispose(); $brushRed2.Dispose(); $brushW.Dispose()
-    $pathL.Dispose(); $pathE.Dispose(); $pathEt.Dispose(); $pathEm.Dispose()
-    $pathEb.Dispose(); $pathL2.Dispose(); $pathYl.Dispose(); $pathYr.Dispose(); $pathYs.Dispose()
+    $fLely.Dispose(); $brushW.Dispose(); $sf.Dispose()
 })
 
 $lblTitle = New-Object System.Windows.Forms.Label
@@ -245,7 +180,7 @@ $lblTitle.Text      = "LELY IT TOOL"
 $lblTitle.Font      = $FontTitle
 $lblTitle.ForeColor = $WHITE
 $lblTitle.BackColor = $PANEL
-$lblTitle.Location  = New-Object System.Drawing.Point(92, 10)
+$lblTitle.Location  = New-Object System.Drawing.Point(110, 10)
 $lblTitle.AutoSize  = $true
 
 $lblSub = New-Object System.Windows.Forms.Label
@@ -253,7 +188,7 @@ $lblSub.Text      = "IT Toolbox  -  Field Engineer Utility"
 $lblSub.Font      = $FontSmall
 $lblSub.ForeColor = $GRAY
 $lblSub.BackColor = $PANEL
-$lblSub.Location  = New-Object System.Drawing.Point(93, 38)
+$lblSub.Location  = New-Object System.Drawing.Point(110, 48)
 $lblSub.AutoSize  = $true
 
 $lblElev = New-Object System.Windows.Forms.Label
@@ -275,25 +210,25 @@ $pnlHeader.Controls.AddRange(@($picCow, $lblTitle, $lblSub, $lblElev))
 $form.Controls.Add($pnlHeader)
 
 # Content
-$Y = 80
+$Y = 92
 
 Add-SectLabel "RECHTEN & TOEGANG" $Y
 $Y += 20
 
-$btnRunAs     = New-FlatBtn "Run as Admin"     "Herstart tool met verhoogde rechten"    20  $Y 278 46
-$btnMakeAdmin = New-FlatBtn "Make Me Admin"    "Voeg toe aan lokale Administrators"     302 $Y 278 46
+$btnRunAs     = New-FlatBtn "Run as Admin"     "Herstart tool met verhoogde rechten"    20  $Y 278 52
+$btnMakeAdmin = New-FlatBtn "Make Me Admin"    "Voeg toe aan lokale Administrators"     302 $Y 278 52
 $form.Controls.AddRange(@($btnRunAs, $btnMakeAdmin))
-$Y += 54
+$Y += 60
 
 Add-Divider $Y; $Y += 10
 
 Add-SectLabel "WINDOWS FIREWALL" $Y
 $Y += 20
 
-$btnFwOff = New-FlatBtn "Firewall UIT" "Max 30 minuten, daarna automatisch aan" 20  $Y 278 46
-$btnFwOn  = New-FlatBtn "Firewall AAN" "Zet firewall handmatig terug aan"        302 $Y 278 46
+$btnFwOff = New-FlatBtn "Firewall UIT" "Max 30 minuten, daarna automatisch aan" 20  $Y 278 52
+$btnFwOn  = New-FlatBtn "Firewall AAN" "Zet firewall handmatig terug aan"        302 $Y 278 52
 $form.Controls.AddRange(@($btnFwOff, $btnFwOn))
-$Y += 54
+$Y += 60
 
 $pnlTimer = New-Object System.Windows.Forms.Panel
 $pnlTimer.Location  = New-Object System.Drawing.Point(20, $Y)
@@ -317,13 +252,13 @@ Add-Divider $Y; $Y += 10
 Add-SectLabel "NETWERK" $Y
 $Y += 20
 
-$btnNetwork  = New-FlatBtn "Netwerk overzicht"      "Open Windows netwerkinstellingen"        20  $Y 278 46
-$btnEthernet = New-FlatBtn "Ethernet / IP & DNS"   "Direct naar IP-adres en DNS instellingen" 302 $Y 278 46
+$btnNetwork  = New-FlatBtn "Netwerk overzicht"      "Open Windows netwerkinstellingen"        20  $Y 278 52
+$btnEthernet = New-FlatBtn "Ethernet / IP & DNS"   "Direct naar IP-adres en DNS instellingen" 302 $Y 278 52
 $form.Controls.AddRange(@($btnNetwork, $btnEthernet))
 
 # Footer
 $pnlFooter = New-Object System.Windows.Forms.Panel
-$pnlFooter.Location  = New-Object System.Drawing.Point(0, 385)
+$pnlFooter.Location  = New-Object System.Drawing.Point(0, 427)
 $pnlFooter.Size      = New-Object System.Drawing.Size(622, 26)
 $pnlFooter.BackColor = $DARK
 $pnlFooter.Add_Paint({
@@ -376,8 +311,8 @@ $timer.Add_Tick({
         $script:lblTimer.Text = "FIREWALL UITGESCHAKELD - HERSTART OVER: $ms`:$ss"
     }
     if ($script:fwSecondsLeft -le 0 -and $script:pnlTimer.Visible) {
-        $cmd = "Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-IN'  -ErrorAction SilentlyContinue; Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -ErrorAction SilentlyContinue"
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`"" -Verb RunAs -WindowStyle Hidden -Wait
+        Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-IN'  -ErrorAction SilentlyContinue
+        Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -ErrorAction SilentlyContinue
         $script:pnlTimer.Visible = $false
         $script:fwSecondsLeft = 0
         Set-Log "Allow-all regels automatisch verwijderd."
@@ -388,8 +323,9 @@ $timer.Start()
 # Button events
 $btnRunAs.Add_Click({
     $script = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.ScriptName }
-    Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$script`"" -Verb RunAs
-    Set-Log "Elevated versie gestart."
+    $script:timer.Stop()
+    Start-ElevatedScript -Path $script
+    $script:form.Close()
 })
 
 $btnMakeAdmin.Add_Click({
@@ -419,16 +355,14 @@ $btnFwOff.Add_Click({
     # Auto-elevate als niet admin
     if (-not (Test-IsAdmin)) {
         $script = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.ScriptName }
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$script`"" -Verb RunAs
-        Set-Log "Elevated versie gestart voor firewall."
+        $script:timer.Stop()
+        Start-ElevatedScript -Path $script
+        $script:form.Close()
         return
     }
     try {
-        $cmd = @"
-New-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-IN'  -Direction Inbound  -Action Allow -Protocol Any -Profile Any -ErrorAction SilentlyContinue | Out-Null
-New-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -Direction Outbound -Action Allow -Protocol Any -Profile Any -ErrorAction SilentlyContinue | Out-Null
-"@
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`"" -Verb RunAs -WindowStyle Hidden -Wait
+        New-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-IN'  -Direction Inbound  -Action Allow -Protocol Any -Profile Any -ErrorAction SilentlyContinue | Out-Null
+        New-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -Direction Outbound -Action Allow -Protocol Any -Profile Any -ErrorAction SilentlyContinue | Out-Null
         $script:fwSecondsLeft = 1800
         $script:pnlTimer.Visible = $true
         Set-Log "Allow-all regels toegevoegd. Timer: 30 min."
@@ -439,8 +373,8 @@ New-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -Direction Outbound -Actio
 
 $btnFwOn.Add_Click({
     try {
-        $cmd = "Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-IN'  -ErrorAction SilentlyContinue; Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -ErrorAction SilentlyContinue"
-        Start-Process "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`"" -Verb RunAs -WindowStyle Hidden -Wait
+        Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-IN'  -ErrorAction SilentlyContinue
+        Remove-NetFirewallRule -DisplayName 'LELY-ALLOW-ALL-OUT' -ErrorAction SilentlyContinue
         $script:fwSecondsLeft = 0
         $script:pnlTimer.Visible = $false
         Set-Log "Allow-all regels verwijderd."
@@ -523,8 +457,8 @@ $btnEthernet.Add_Click({
                 param($sender, $ev)
                 $parts = $sender.Tag -split [char]124, 3
                 $ev.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-                $fN = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-                $fD = New-Object System.Drawing.Font("Segoe UI", 7)
+                $fN = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+                $fD = New-Object System.Drawing.Font("Segoe UI", 8)
                 $bN = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
                 $bD = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#aaaaaa"))
                 $ev.Graphics.DrawString($parts[0], $fN, $bN, 12, 7)
@@ -573,7 +507,7 @@ $btnEthernet.Add_Click({
     # Dialoog venster
     $dlg = New-Object System.Windows.Forms.Form
     $dlg.Text            = "IP-instellingen - $adapterName"
-    $dlg.Size            = New-Object System.Drawing.Size(400, 420)
+    $dlg.Size            = New-Object System.Drawing.Size(460, 490)
     $dlg.MinimumSize     = $dlg.Size
     $dlg.MaximumSize     = $dlg.Size
     $dlg.BackColor       = [System.Drawing.ColorTranslator]::FromHtml("#0d0d0d")
@@ -582,12 +516,13 @@ $btnEthernet.Add_Click({
     $dlg.MinimizeBox     = $false
     $dlg.StartPosition   = [System.Windows.Forms.FormStartPosition]::CenterParent
 
-    $fontDlg  = New-Object System.Drawing.Font("Segoe UI", 9)
+    $fontDlg  = New-Object System.Drawing.Font("Segoe UI", 10)
     $fontLbl  = New-Object System.Drawing.Font("Segoe UI", 8)
     $orange   = [System.Drawing.ColorTranslator]::FromHtml("#CC0000")
     $white    = [System.Drawing.Color]::White
     $darkbg   = [System.Drawing.ColorTranslator]::FromHtml("#0d0d0d")
     $inputbg  = [System.Drawing.ColorTranslator]::FromHtml("#1a1a1a")
+    $dlgInputW = 410
 
     function New-DlgLabel($text, $x, $y) {
         $l = New-Object System.Windows.Forms.Label
@@ -605,44 +540,51 @@ $btnEthernet.Add_Click({
         $t.ForeColor = $white; $t.BackColor = $inputbg
         $t.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
         $t.Location = New-Object System.Drawing.Point($x, $y)
-        $t.Size = New-Object System.Drawing.Size($w, 22)
+        $t.Size = New-Object System.Drawing.Size($w, 26)
         return $t
     }
 
     # DHCP / Statisch toggle
     $radioDHCP   = New-Object System.Windows.Forms.RadioButton
-    $radioDHCP.Text = "DHCP"; $radioDHCP.Font = $fontDlg
+    $radioDHCP.Text = "DHCP (automatisch)"; $radioDHCP.Font = $fontDlg
     $radioDHCP.ForeColor = $white; $radioDHCP.BackColor = $darkbg
     $radioDHCP.Location = New-Object System.Drawing.Point(20, 16)
     $radioDHCP.AutoSize = $true
     $radioDHCP.Checked = $isDHCP
 
     $radioStatic = New-Object System.Windows.Forms.RadioButton
-    $radioStatic.Text = "Statisch"; $radioStatic.Font = $fontDlg
+    $radioStatic.Text = "Statisch IP"; $radioStatic.Font = $fontDlg
     $radioStatic.ForeColor = $white; $radioStatic.BackColor = $darkbg
-    $radioStatic.Location = New-Object System.Drawing.Point(110, 16)
+    $radioStatic.Location = New-Object System.Drawing.Point(220, 16)
     $radioStatic.AutoSize = $true
     $radioStatic.Checked = -not $isDHCP
 
-    # Invoervelden
-    $lblIP   = New-DlgLabel "IP-adres"      20  60
-    $txtIP   = New-DlgInput $curIP          20  76  200
-    $lblMask = New-DlgLabel "Subnetmasker (bijv. 255.255.255.0)" 20 108
-    $txtMask = New-DlgInput "$curMask"      20  124 200
-    $lblGW   = New-DlgLabel "Gateway"       20  156
-    $txtGW   = New-DlgInput $curGW          20  172 200
-    $lblD1   = New-DlgLabel "DNS 1"         20  204
-    $txtDNS1 = New-DlgInput $curDNS1        20  220 200
-    $lblD2   = New-DlgLabel "DNS 2"         20  252
-    $txtDNS2 = New-DlgInput $curDNS2        20  268 200
+    # Scheidingslijn onder radio buttons
+    $divDlg = New-Object System.Windows.Forms.Panel
+    $divDlg.Location = New-Object System.Drawing.Point(20, 46)
+    $divDlg.Size = New-Object System.Drawing.Size(410, 1)
+    $divDlg.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#2a2a2a")
+
+    # Invoervelden  (volledig breedte, 8px gap tussen label en veld, 14px tussen groepen)
+    $lblIP   = New-DlgLabel "IP-adres"               20  56
+    $txtIP   = New-DlgInput $curIP                   20  78  $dlgInputW   # 56+14(lbl)+8pad = 78; einde 104
+    $lblMask = New-DlgLabel "Subnetmasker"            20 120               # 104+16gap = 120
+    $txtMask = New-DlgInput "$curMask"               20 142  $dlgInputW   # einde 168
+    $lblGW   = New-DlgLabel "Gateway"                20 184               # 168+16 = 184
+    $txtGW   = New-DlgInput $curGW                   20 206  $dlgInputW   # einde 232
+    $lblD1   = New-DlgLabel "DNS 1"                  20 248               # 232+16 = 248
+    $txtDNS1 = New-DlgInput $curDNS1                 20 270  $dlgInputW   # einde 296
+    $lblD2   = New-DlgLabel "DNS 2  (optioneel)"     20 312               # 296+16 = 312
+    $txtDNS2 = New-DlgInput $curDNS2                 20 334  $dlgInputW   # einde 360
 
     $staticControls = @($lblIP,$txtIP,$lblMask,$txtMask,$lblGW,$txtGW,$lblD1,$txtDNS1,$lblD2,$txtDNS2)
     foreach ($c in $staticControls) { $c.Enabled = -not $isDHCP }
 
     $radioDHCP.Add_CheckedChanged({
-        $en = -not $radioDHCP.Checked
+        param($s,$ev)
+        $en = -not $s.Checked
         foreach ($c in $staticControls) { $c.Enabled = $en }
-    })
+    }.GetNewClosure())
 
     # Knoppen
     $btnApply = New-Object System.Windows.Forms.Button
@@ -650,8 +592,8 @@ $btnEthernet.Add_Click({
     $btnApply.ForeColor = $white; $btnApply.BackColor = $orange
     $btnApply.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnApply.FlatAppearance.BorderSize = 0
-    $btnApply.Location = New-Object System.Drawing.Point(20, 310)
-    $btnApply.Size = New-Object System.Drawing.Size(110, 30)
+    $btnApply.Location = New-Object System.Drawing.Point(20, 378)
+    $btnApply.Size = New-Object System.Drawing.Size(130, 32)
     $btnApply.Cursor = [System.Windows.Forms.Cursors]::Hand
 
     $btnCancel = New-Object System.Windows.Forms.Button
@@ -659,15 +601,15 @@ $btnEthernet.Add_Click({
     $btnCancel.ForeColor = $white; $btnCancel.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#1a1a1a")
     $btnCancel.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnCancel.FlatAppearance.BorderColor = [System.Drawing.ColorTranslator]::FromHtml("#333333")
-    $btnCancel.Location = New-Object System.Drawing.Point(145, 310)
-    $btnCancel.Size = New-Object System.Drawing.Size(110, 30)
+    $btnCancel.Location = New-Object System.Drawing.Point(165, 378)
+    $btnCancel.Size = New-Object System.Drawing.Size(130, 32)
     $btnCancel.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $btnCancel.Add_Click({ $dlg.Close() })
+    $btnCancel.Add_Click({ $dlg.Close() }.GetNewClosure())
 
     $lblStatus = New-Object System.Windows.Forms.Label
     $lblStatus.Font = $fontLbl; $lblStatus.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#555555")
-    $lblStatus.BackColor = $darkbg; $lblStatus.Location = New-Object System.Drawing.Point(20, 350)
-    $lblStatus.Size = New-Object System.Drawing.Size(355, 30); $lblStatus.Text = "Adapter: $adapterName"
+    $lblStatus.BackColor = $darkbg; $lblStatus.Location = New-Object System.Drawing.Point(20, 422)
+    $lblStatus.Size = New-Object System.Drawing.Size(410, 32); $lblStatus.Text = "Adapter: $adapterName"
 
     $btnApply.Add_Click({
         if ($radioDHCP.Checked) {
@@ -700,15 +642,19 @@ $btnEthernet.Add_Click({
             $lblStatus.Text = "Statisch IP ingesteld: $ip"
             Set-Log "IP ingesteld: $ip op $adapterName."
         }
-    })
+    }.GetNewClosure())
 
     $dlg.Controls.AddRange(@(
-        $radioDHCP, $radioStatic,
+        $radioDHCP, $radioStatic, $divDlg,
         $lblIP, $txtIP, $lblMask, $txtMask, $lblGW, $txtGW,
         $lblD1, $txtDNS1, $lblD2, $txtDNS2,
         $btnApply, $btnCancel, $lblStatus
     ))
     $dlg.ShowDialog() | Out-Null
+})
+
+$form.Add_FormClosing({
+    $script:timer.Stop()
 })
 
 [System.Windows.Forms.Application]::Run($form)
