@@ -2,9 +2,19 @@
 #  EOO – Hulp bij Windows installaties  |  Portable editie
 # ════════════════════════════════════════════════════════════════
 
+$ScriptUrl = "https://raw.githubusercontent.com/Easy-Office-Online/scripts/refs/heads/main/EOO-WinInstall-GUI.ps1"
+
 # UAC elevatie – herstart als admin indien nodig
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    $cmd = "-NoProfile -ExecutionPolicy Bypass -STA -Command `"irm '$ScriptUrl' | iex`""
+    Start-Process powershell.exe -ArgumentList $cmd -Verb RunAs
+    exit
+}
+
+# STA vereist voor WinForms – herstart indien nodig
+if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
+    $cmd = "-NoProfile -ExecutionPolicy Bypass -STA -Command `"irm '$ScriptUrl' | iex`""
+    Start-Process powershell.exe -ArgumentList $cmd
     exit
 }
 
@@ -349,8 +359,8 @@ function New-IconBox {
 # ── Form ─────────────────────────────────────────────────────────
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = 'EOO - Windows Installatie Tool'
-$form.Size            = New-Object System.Drawing.Size(980, 640)
-$form.MinimumSize     = New-Object System.Drawing.Size(780, 540)
+$form.Size            = New-Object System.Drawing.Size(980, 800)
+$form.MinimumSize     = New-Object System.Drawing.Size(780, 700)
 $form.StartPosition   = 'CenterScreen'
 $form.BackColor       = $clrBg
 $form.ForeColor       = [System.Drawing.Color]::White
@@ -397,7 +407,7 @@ $pnlHeader.Controls.Add($lblVersion)
 
 # ── Info panel ───────────────────────────────────────────────────
 $pnlInfo = New-Object System.Windows.Forms.Panel
-$pnlInfo.Size      = New-Object System.Drawing.Size(446, 134)
+$pnlInfo.Size      = New-Object System.Drawing.Size(446, 148)
 $pnlInfo.Location  = New-Object System.Drawing.Point(22, 92)
 $pnlInfo.BackColor = $clrPanel
 $pnlInfo.add_Paint({
@@ -428,10 +438,11 @@ function New-InfoRow {
 }
 
 $rowWin  = New-InfoRow $pnlInfo 10
-$rowAct  = New-InfoRow $pnlInfo 34
-$rowTpm  = New-InfoRow $pnlInfo 58
-$rowBoot = New-InfoRow $pnlInfo 82
-$rowNet  = New-InfoRow $pnlInfo 106
+$rowAct  = New-InfoRow $pnlInfo 32
+$rowTpm  = New-InfoRow $pnlInfo 54
+$rowBoot = New-InfoRow $pnlInfo 76
+$rowNet  = New-InfoRow $pnlInfo 98
+$rowHP   = New-InfoRow $pnlInfo 120
 
 # Overall status label – groot symbool rechts in het info panel
 $lblStatus = New-Object System.Windows.Forms.Label
@@ -510,16 +521,16 @@ function New-SectionLabel {
 }
 
 # ── Sectie: Systeem ──────────────────────────────────────────────
-New-SectionLabel 'Systeem' 218
+New-SectionLabel 'Systeem' 258
 
-$btnRestart = New-EOOButton 'Restart' 22 234 214 34
+$btnRestart = New-EOOButton 'Restart' 22 274 214 34
 Add-BtnIcon $btnRestart (New-RefreshBitmap $clrAccent)
 $btnRestart.Add_Click({
     Write-Console 'Systeem wordt herstart...' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /t 0' -NoNewWindow
 })
 
-$btnShutdown = New-EOOButton 'Shutdown' 246 234 222 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
+$btnShutdown = New-EOOButton 'Shutdown' 246 274 222 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
 $btnShutdown.FlatAppearance.MouseOverBackColor = $clrDanger
 $shutdownWhite = [System.Drawing.Color]::White
 $btnShutdown.Add_MouseEnter({ $this.ForeColor = $shutdownWhite })
@@ -530,21 +541,21 @@ $btnShutdown.Add_Click({
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /s /t 0' -NoNewWindow
 })
 
-$btnWU = New-EOOButton 'Windows Update openen' 22 276
+$btnWU = New-EOOButton 'Windows Update openen' 22 316
 Add-BtnIcon $btnWU (New-WindowsBitmap $clrAccent)
 $btnWU.Add_Click({
     Write-Console 'Windows Update instellingen openen...' 'start'
     Start-Process 'ms-settings:windowsupdate'
 })
 
-$btnDM = New-EOOButton 'Apparaatbeheer openen' 22 318
+$btnDM = New-EOOButton 'Apparaatbeheer openen' 22 358
 Add-BtnIcon $btnDM (New-GearBitmap $clrAccent)
 $btnDM.Add_Click({
     Write-Console 'Apparaatbeheer openen...' 'start'
     Start-Process 'devmgmt.msc'
 })
 
-$btnAW = New-EOOButton 'Windows activeren' 22 360
+$btnAW = New-EOOButton 'Windows activeren' 22 400
 Add-BtnIcon $btnAW (New-KeyBitmap $clrAccent)
 $btnAW.Add_Click({
     Write-Console 'Windows activeringsscherm openen...' 'start'
@@ -552,9 +563,9 @@ $btnAW.Add_Click({
 })
 
 # ── Sectie: Drivers ──────────────────────────────────────────────
-New-SectionLabel 'Drivers' 410
+New-SectionLabel 'Drivers' 452
 
-$btnLSU = New-EOOButton 'Lenovo System Update installeren' 22 426
+$btnLSU = New-EOOButton 'Lenovo System Update installeren' 22 468
 Add-BtnIcon $btnLSU (New-ArrowBitmap $clrAccent)
 $btnLSU.Add_Click({
     $script:btnLSU.Enabled = $false
@@ -648,7 +659,7 @@ $btnLSU.Add_Click({
     $script:timerLSU.Start()
 })
 
-$btnHPIA = New-EOOButton 'HP Image Assistant installeren en draaien' 22 468
+$btnHPIA = New-EOOButton 'HP Image Assistant installeren en draaien' 22 510
 Add-BtnIcon $btnHPIA (New-ArrowBitmap $clrAccent)
 $btnHPIA.Add_Click({
     $script:btnHPIA.Enabled = $false
@@ -727,9 +738,9 @@ $btnHPIA.Add_Click({
 })
 
 # ── Sectie: Autopilot ────────────────────────────────────────────
-New-SectionLabel 'Autopilot' 518
+New-SectionLabel 'Autopilot' 562
 
-$btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 534
+$btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 578
 Add-BtnIcon $btnHWIDOvr (New-DownArrowBitmap $clrAccent)
 $btnHWIDOvr.Add_Click({
     Write-Console 'HWID Export (Overwrite) wordt gestart...' 'start'
@@ -739,7 +750,7 @@ $btnHWIDOvr.Add_Click({
     Write-Console 'HWID Export: voer GroupTag in het geopende venster in.' 'info'
 })
 
-$btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 576
+$btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 620
 Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
 $btnHWIDApp.Add_Click({
     Write-Console 'HWID Export (Append) wordt gestart...' 'start'
@@ -754,7 +765,7 @@ $btnHWIDApp.Add_Click({
 $pnlDivider = New-Object System.Windows.Forms.Panel
 $pnlDivider.BackColor = $clrDivider
 $pnlDivider.Location  = New-Object System.Drawing.Point(490, 80)
-$pnlDivider.Size      = New-Object System.Drawing.Size(2, 530)
+$pnlDivider.Size      = New-Object System.Drawing.Size(2, 690)
 $pnlDivider.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left
 $form.Controls.Add($pnlDivider)
 
@@ -769,7 +780,7 @@ $form.Controls.Add($lblConsoleHdr)
 
 $txtConsole = New-Object System.Windows.Forms.RichTextBox
 $txtConsole.Location    = New-Object System.Drawing.Point(502, 100)
-$txtConsole.Size        = New-Object System.Drawing.Size(462, 506)
+$txtConsole.Size        = New-Object System.Drawing.Size(462, 660)
 $txtConsole.BackColor   = [System.Drawing.Color]::FromArgb(10, 20, 45)
 $txtConsole.ForeColor   = $clrSubText
 $txtConsole.Font        = New-Object System.Drawing.Font("Consolas", 8)
@@ -799,7 +810,7 @@ function Write-Console {
 $pnlFooter = New-Object System.Windows.Forms.Panel
 $pnlFooter.Size      = New-Object System.Drawing.Size(980, 30)
 $pnlFooter.Anchor    = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlFooter.Location  = New-Object System.Drawing.Point(0, 610)
+$pnlFooter.Location  = New-Object System.Drawing.Point(0, 770)
 $pnlFooter.BackColor = $clrPanel
 $form.Controls.Add($pnlFooter)
 
@@ -915,6 +926,60 @@ function Display-InternetStatus {
     }
 }
 
+function Display-HPBloatware {
+    $hpBloatNames = @(
+        'HP Wolf Security',
+        'HP Wolf Security Application Support for Chrome',
+        'HP Wolf Security Application Support for Windows',
+        'HP Sure Click',
+        'HP Sure Sense',
+        'HP Sure Connect',
+        'HP Sure Start',
+        'HP Sure View',
+        'HP Support Assistant',
+        'HP Jumpstart',
+        'HP Instant Ink',
+        'HP Audio Switch',
+        'HP Documentation',
+        'HP Notifications',
+        'HP PC Hardware Diagnostics',
+        'HP Privacy Settings',
+        'HP Smart',
+        'myHP',
+        'Poly Lens',
+        'HP LAN/WLAN Management'
+    )
+
+    $regPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+
+    $found = @()
+    $regApps = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName }
+    foreach ($app in $regApps) {
+        foreach ($bloat in $hpBloatNames) {
+            if ($app.DisplayName -like "*$bloat*") {
+                $found += $app.DisplayName
+                break
+            }
+        }
+    }
+    try {
+        $uwp = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+            Where-Object { $_.Publisher -like '*HP Inc*' -or $_.Publisher -like '*Hewlett*' }
+        foreach ($app in $uwp) { $found += $app.Name }
+    } catch {}
+
+    if ($found.Count -eq 0) {
+        Set-InfoRow $rowHP -Text 'Geen HP bloatware gevonden' -OK $true
+    } else {
+        Set-InfoRow $rowHP -Text "HP bloatware: $($found.Count) app(s) gevonden" -OK $false
+    }
+    $script:hpBloatFound = $found
+}
+
 function Display-AllGoodThumb {
     if ($script:okActivation -and $script:okTpm -and $script:okSecureBoot -and $script:okInternet) {
         $lblStatus.Text      = [System.Char]::ConvertFromUtf32(0x1F44D)
@@ -931,6 +996,7 @@ Display-ActivationStatus
 Display-TpmStatus
 Display-SecureBootStatus
 Display-InternetStatus
+Display-HPBloatware
 Display-AllGoodThumb
 
 Write-Console 'Systeemcontrole uitgevoerd.' 'info'
@@ -938,5 +1004,11 @@ Write-Console "Windows activatie: $(if ($script:okActivation) { 'OK' } else { 'N
 Write-Console "TPM: $(if ($script:okTpm) { 'OK' } else { 'NIET gevonden' })" $(if ($script:okTpm) { 'ok' } else { 'error' })
 Write-Console "Secure Boot: $(if ($script:okSecureBoot) { 'OK' } else { 'NIET ingeschakeld' })" $(if ($script:okSecureBoot) { 'ok' } else { 'error' })
 Write-Console "Internet: $(if ($script:okInternet) { 'OK' } else { 'GEEN verbinding' })" $(if ($script:okInternet) { 'ok' } else { 'error' })
+if ($script:hpBloatFound.Count -gt 0) {
+    Write-Console "HP bloatware ($($script:hpBloatFound.Count) app(s)):" 'error'
+    foreach ($item in $script:hpBloatFound) { Write-Console "  - $item" 'error' }
+} else {
+    Write-Console 'HP bloatware: geen gevonden' 'ok'
+}
 
 [void]$form.ShowDialog()
