@@ -2,19 +2,24 @@
 #  EOO – Hulp bij Windows installaties  |  Portable editie
 # ════════════════════════════════════════════════════════════════
 
-$ScriptUrl = "https://raw.githubusercontent.com/Easy-Office-Online/scripts/refs/heads/main/EOO-WinInstall-GUI.ps1"
+$ScriptUrl = "https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/EOO-WinInstall-GUI.ps1"
+
+# Bepaal hoe het script opnieuw gestart moet worden
+if ($PSCommandPath) {
+    $restartCmd = "-NoProfile -ExecutionPolicy Bypass -STA -File `"$PSCommandPath`""
+} else {
+    $restartCmd = "-NoProfile -ExecutionPolicy Bypass -STA -Command `"irm '$ScriptUrl' | iex`""
+}
 
 # UAC elevatie – herstart als admin indien nodig
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    $cmd = "-NoProfile -ExecutionPolicy Bypass -STA -Command `"irm '$ScriptUrl' | iex`""
-    Start-Process powershell.exe -ArgumentList $cmd -Verb RunAs
+    Start-Process powershell.exe -ArgumentList $restartCmd -Verb RunAs
     exit
 }
 
 # STA vereist voor WinForms – herstart indien nodig
 if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
-    $cmd = "-NoProfile -ExecutionPolicy Bypass -STA -Command `"irm '$ScriptUrl' | iex`""
-    Start-Process powershell.exe -ArgumentList $cmd
+    Start-Process powershell.exe -ArgumentList $restartCmd
     exit
 }
 
