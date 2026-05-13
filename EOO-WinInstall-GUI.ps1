@@ -3,6 +3,8 @@
 #  Versie: Pizza Diavola
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
+$script:currentVersion = [System.Version]'5.2'
+$script:versionName    = 'Pizza Diavola'
 
 # UAC elevatie – herstart als admin indien nodig
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -148,7 +150,6 @@ try {
     $script:logoImage = [System.Drawing.Image]::FromStream($logoStream)
 } catch { }
 
-$script:currentVersion  = [System.Version]'5.0'
 $script:remoteVersion   = $null
 $script:githubScriptUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/EOO-WinInstall-GUI.ps1'
 
@@ -485,7 +486,7 @@ $lblSubTitle.AutoSize  = $true
 $pnlHeader.Controls.Add($lblSubTitle)
 
 $lblVersion = New-Object System.Windows.Forms.Label
-$lblVersion.Text      = 'v5.0 - Pizza Diavola'
+$lblVersion.Text      = "v$script:currentVersion - $script:versionName"
 $lblVersion.Font      = $fntSub
 $lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
 $lblVersion.BackColor = [System.Drawing.Color]::Transparent
