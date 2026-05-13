@@ -148,6 +148,10 @@ try {
     $script:logoImage = [System.Drawing.Image]::FromStream($logoStream)
 } catch { }
 
+$script:currentVersion  = [System.Version]'5.0'
+$script:remoteVersion   = $null
+$script:githubScriptUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/EOO-WinInstall-GUI.ps1'
+
 # ── Layout constanten ─────────────────────────────────────────────
 $HDR_H       = 110   # header hoogte
 $INFO_ROW_H  = 26    # hoogte per info-rij
@@ -490,6 +494,56 @@ $lblVersion.AutoSize  = $true
 $lblVersion.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $pnlHeader.Controls.Add($lblVersion)
 
+$script:btnUpdate = New-Object System.Windows.Forms.Button
+$script:btnUpdate.Text      = 'Update beschikbaar'
+$script:btnUpdate.Font      = $fntSub
+$script:btnUpdate.ForeColor = [System.Drawing.Color]::White
+$script:btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 0)
+$script:btnUpdate.FlatStyle = 'Flat'
+$script:btnUpdate.FlatAppearance.BorderColor        = [System.Drawing.Color]::FromArgb(0, 80, 0)
+$script:btnUpdate.FlatAppearance.BorderSize         = 1
+$script:btnUpdate.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 160, 0)
+$script:btnUpdate.Location  = New-Object System.Drawing.Point(760, 58)
+$script:btnUpdate.Size      = New-Object System.Drawing.Size(162, 24)
+$script:btnUpdate.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+$script:btnUpdate.Cursor    = [System.Windows.Forms.Cursors]::Default
+$script:btnUpdate.TextAlign = 'MiddleCenter'
+$script:btnUpdate.Visible   = $false
+$script:btnUpdate.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(0, 160, 0) })
+$script:btnUpdate.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 0) })
+$script:btnUpdate.Add_Click({
+    $script:btnUpdate.Enabled = $false
+    $script:btnUpdate.Text    = 'Bezig...'
+    try {
+        $raw      = (Invoke-WebRequest -Uri $script:githubScriptUrl -UseBasicParsing).Content
+        $encoding = New-Object System.Text.UTF8Encoding($true)
+        [System.IO.File]::WriteAllText($PSCommandPath, $raw, $encoding)
+        $keuze = [System.Windows.Forms.MessageBox]::Show(
+            "Script bijgewerkt naar v$script:remoteVersion.`nNu herstarten?",
+            'Update geslaagd',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        )
+        if ($keuze -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
+            $form.Close()
+        } else {
+            $script:btnUpdate.Text    = 'Herstart vereist'
+            $script:btnUpdate.Enabled = $true
+        }
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Update mislukt:`n$_",
+            'Fout',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
+        $script:btnUpdate.Text    = 'Update beschikbaar'
+        $script:btnUpdate.Enabled = $true
+    }
+})
+$pnlHeader.Controls.Add($script:btnUpdate)
+
 # ── Footer (alvast aanmaken, inhoud komt verderop) ────────────────
 $FTR_H = 30
 $pnlFooter = New-Object System.Windows.Forms.Panel
@@ -517,6 +571,7 @@ $form.Controls.Add($splitMain)
 $form.Add_Shown({
     $splitMain.SplitterDistance = [int]($splitMain.Width * 0.50)
     Invoke-LayoutResize
+    Start-VersionCheck
 })
 
 $pnlLeftScroll = New-Object System.Windows.Forms.Panel
@@ -1377,6 +1432,28 @@ if ($script:hpBloatFound.Count -gt 0) {
     foreach ($item in $script:hpBloatFound) { Write-Console "  - $item" 'error' }
 } else {
     Write-Console 'HP bloatware: geen gevonden' 'ok'
+}
+
+# ── Versiecheck via GitHub ────────────────────────────────────────
+function Start-VersionCheck {
+    $timer          = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 2000
+    $timer.Add_Tick({
+        $timer.Stop()
+        try {
+            $raw = (Invoke-WebRequest -Uri $script:githubScriptUrl -UseBasicParsing).Content
+            if ($raw -match '\$lblVersion\.Text\s*=\s*''v([\d\.]+)') {
+                $script:remoteVersion = [System.Version]$matches[1]
+                if ($script:remoteVersion -gt $script:currentVersion) {
+                    $script:btnUpdate.Text    = "Update v$script:remoteVersion"
+                    $script:btnUpdate.Visible = $true
+                    $lblVersion.ForeColor     = [System.Drawing.Color]::FromArgb(255, 200, 0)
+                }
+            }
+        } catch { }
+        $timer.Dispose()
+    })
+    $timer.Start()
 }
 
 [void]$form.ShowDialog()
