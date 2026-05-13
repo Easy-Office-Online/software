@@ -1,8 +1,8 @@
 # ════════════════════════════════════════════════════════════════
 #  EOO – Hulp bij Windows installaties  |  Portable editie
-#  Versie: Pizza Diavola
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
+# ── Versie (hier aanpassen bij nieuwe release) ───────────────────
 $script:currentVersion = [System.Version]'5.2'
 $script:versionName    = 'Pizza Diavola'
 
