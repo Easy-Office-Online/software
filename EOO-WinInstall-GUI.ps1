@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'5.2'
+$script:currentVersion = [System.Version]'5.0'
 $script:versionName    = 'Pizza Diavola'
 
 # UAC elevatie – herstart als admin indien nodig
@@ -1443,7 +1443,7 @@ function Start-VersionCheck {
         $timer.Stop()
         try {
             $raw = (Invoke-WebRequest -Uri $script:githubScriptUrl -UseBasicParsing).Content
-            if ($raw -match '\$lblVersion\.Text\s*=\s*''v([\d\.]+)') {
+            if ($raw -match '\$script:currentVersion\s*=\s*\[System\.Version\]''([\d\.]+)''') {
                 $script:remoteVersion = [System.Version]$matches[1]
                 if ($script:remoteVersion -gt $script:currentVersion) {
                     $script:btnUpdate.Text    = "Update v$script:remoteVersion"
