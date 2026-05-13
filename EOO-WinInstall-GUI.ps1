@@ -929,7 +929,7 @@ Add-BtnIcon $btnLSU (New-ArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnLSU)
 $btnLSU.Add_Click({
     $script:btnLSU.Enabled = $false
-    $script:Write_Console_Ref = Get-Item Function:\Write-Console
+    $script:lsuSignal = $null
     Write-Console 'Lenovo System Update: gestart...' 'start'
 
     $script:jobLSU = Start-Job -ScriptBlock {
@@ -981,10 +981,10 @@ $btnLSU.Add_Click({
     $script:timerLSU.Interval = 500
     $script:timerLSU.Add_Tick({
         foreach ($line in ($script:jobLSU.ChildJobs[0].Output.ReadAll())) {
-            if     ($line -match '^SIGNAL:') { }
-            elseif ($line -match '^\[OK\]')  { Write-Console $line 'ok' }
+            if     ($line -match '^SIGNAL:')     { $script:lsuSignal = $line }
+            elseif ($line -match '^\[OK\]')      { Write-Console $line 'ok' }
             elseif ($line -match 'FOUT|mislukt') { Write-Console $line 'error' }
-            else                             { Write-Console $line 'info' }
+            else                                 { Write-Console $line 'info' }
         }
         foreach ($err in ($script:jobLSU.ChildJobs[0].Error.ReadAll())) {
             Write-Console "FOUT: $($err.Exception.Message)" 'error'
@@ -996,12 +996,9 @@ $btnLSU.Add_Click({
             if ($script:jobLSU.State -eq 'Failed') {
                 Write-Console "FOUT: $($script:jobLSU.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
             } else {
-                # Zoek SIGNAL-regels in alle output
-                $allOutput = $script:jobLSU.ChildJobs[0].Output + $script:jobLSU.ChildJobs[0].Output.ReadAll()
-                $signal = @($script:jobLSU | Receive-Job -ErrorAction SilentlyContinue) | Where-Object { $_ -match '^SIGNAL:' } | Select-Object -Last 1
-                if ($signal -match '^SIGNAL:UPTODATE') {
+                if ($script:lsuSignal -match '^SIGNAL:UPTODATE') {
                     Write-Console 'Al up-to-date, geen actie nodig.' 'ok'
-                } elseif ($signal -match '^SIGNAL:TVSU:(.+)') {
+                } elseif ($script:lsuSignal -match '^SIGNAL:TVSU:(.+)') {
                     $tvsuPath = $matches[1].Trim()
                     if ($tvsuPath -and (Test-Path $tvsuPath)) {
                         Write-Console 'Lenovo System Update wordt gestart...' 'start'
@@ -1437,10 +1434,10 @@ if ($script:hpBloatFound.Count -gt 0) {
 
 # ── Versiecheck via GitHub ────────────────────────────────────────
 function Start-VersionCheck {
-    $timer          = New-Object System.Windows.Forms.Timer
-    $timer.Interval = 2000
-    $timer.Add_Tick({
-        $timer.Stop()
+    $script:timerVersionCheck          = New-Object System.Windows.Forms.Timer
+    $script:timerVersionCheck.Interval = 2000
+    $script:timerVersionCheck.Add_Tick({
+        $script:timerVersionCheck.Stop()
         try {
             $raw = (Invoke-WebRequest -Uri $script:githubScriptUrl -UseBasicParsing).Content
             if ($raw -match '\$script:currentVersion\s*=\s*\[System\.Version\]''([\d\.]+)''') {
@@ -1452,9 +1449,10 @@ function Start-VersionCheck {
                 }
             }
         } catch { }
-        $timer.Dispose()
+        $script:timerVersionCheck.Dispose()
+        $script:timerVersionCheck = $null
     })
-    $timer.Start()
+    $script:timerVersionCheck.Start()
 }
 
 [void]$form.ShowDialog()
