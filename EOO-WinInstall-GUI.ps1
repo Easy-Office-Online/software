@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'5.0'
+$script:currentVersion = [System.Version]'5.2'
 $script:versionName    = 'Pizza Diavola'
 
 # UAC elevatie – herstart als admin indien nodig
