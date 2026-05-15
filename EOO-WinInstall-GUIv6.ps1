@@ -456,13 +456,14 @@ $pnlHeader.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Win
 $pnlHeader.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 128)
 $pnlHeader.add_Paint(({
     param($s, $e)
-    $g = $e.Graphics
-    $w = [int]$pnlHeader.Width
-    $h = [int]$pnlHeader.Height - 4
-    $rect   = New-Object System.Drawing.Rectangle(0, 0, $w, $h)
-    $clrL   = [System.Drawing.Color]::FromArgb(0, 128, 128)
-    $clrR   = [System.Drawing.Color]::FromArgb(0, 160, 160)
-    $brush  = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $clrL, $clrR, [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal)
+    $g    = $e.Graphics
+    $w    = [int]$pnlHeader.Width
+    $h    = ([int]$pnlHeader.Height) - 4
+    $rect  = [System.Drawing.Rectangle]::new(0, 0, $w, $h)
+    $clrL  = [System.Drawing.Color]::FromArgb(0, 128, 128)
+    $clrR  = [System.Drawing.Color]::FromArgb(0, 160, 160)
+    $mode  = [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal
+    $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $clrL, $clrR, $mode)
     $g.FillRectangle($brush, $rect)
     $brush.Dispose()
 }).GetNewClosure())
