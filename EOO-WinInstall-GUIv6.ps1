@@ -1134,68 +1134,6 @@ $btnHWIDApp.Add_Click({
     Write-Console "HWID Blob Upload (Append) gestart." 'info'
 })
 
-$btnHWIDBlob = New-EOOButton 'HWID Export + Upload naar Azure Blob' 22 ($SECT_Y + 596)
-Add-BtnIcon $btnHWIDBlob (New-CloudBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnHWIDBlob)
-$btnHWIDBlob.Add_Click({
-    $dlg2 = New-Object System.Windows.Forms.Form
-    $dlg2.Text            = 'HWID Blob Upload'
-    $dlg2.Size            = New-Object System.Drawing.Size(500, 210)
-    $dlg2.StartPosition   = 'CenterParent'
-    $dlg2.FormBorderStyle = 'FixedDialog'
-    $dlg2.MaximizeBox     = $false
-    $dlg2.MinimizeBox     = $false
-    $dlg2.BackColor       = [System.Drawing.Color]::FromArgb(192, 192, 192)
-    $dlg2.Font            = $fntLabel
-
-    $y2 = 12
-    $lGt = New-Object System.Windows.Forms.Label
-    $lGt.Text     = 'GroupTag (bijv: EOO-W11-FLEX):'
-    $lGt.Location = New-Object System.Drawing.Point(10, $y2); $lGt.AutoSize = $true
-    $dlg2.Controls.Add($lGt); $y2 += 18
-    $txtGt = New-Object System.Windows.Forms.TextBox
-    $txtGt.Location = New-Object System.Drawing.Point(10, $y2)
-    $txtGt.Size     = New-Object System.Drawing.Size(468, 22)
-    $dlg2.Controls.Add($txtGt); $y2 += 30
-
-    $lSas = New-Object System.Windows.Forms.Label
-    $lSas.Text     = 'SAS URL (gebruik ##COMPUTERNAME## als placeholder voor de bestandsnaam):'
-    $lSas.Location = New-Object System.Drawing.Point(10, $y2); $lSas.AutoSize = $true
-    $dlg2.Controls.Add($lSas); $y2 += 18
-    $txtSas = New-Object System.Windows.Forms.TextBox
-    $txtSas.Text     = $script:azureBlobSasUrl
-    $txtSas.Location = New-Object System.Drawing.Point(10, $y2)
-    $txtSas.Size     = New-Object System.Drawing.Size(468, 22)
-    $dlg2.Controls.Add($txtSas); $y2 += 34
-
-    $btnOk2 = New-Object System.Windows.Forms.Button
-    $btnOk2.Text         = 'Uploaden'
-    $btnOk2.Location     = New-Object System.Drawing.Point(10, $y2)
-    $btnOk2.Size         = New-Object System.Drawing.Size(100, 26)
-    $btnOk2.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $dlg2.Controls.Add($btnOk2)
-    $dlg2.AcceptButton = $btnOk2
-
-    if ($dlg2.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
-        $groupTag = $txtGt.Text.Trim()
-        $sasUrl   = $txtSas.Text.Trim()
-        if (-not $groupTag) {
-            [System.Windows.Forms.MessageBox]::Show('Voer een GroupTag in.', 'Fout', 'OK', 'Error') | Out-Null
-            return
-        }
-        if (-not $sasUrl) {
-            [System.Windows.Forms.MessageBox]::Show('Voer een SAS URL in.', 'Fout', 'OK', 'Error') | Out-Null
-            return
-        }
-        $script:azureBlobSasUrl = $sasUrl
-        $blobUrl = $sasUrl.Replace('##COMPUTERNAME##', $env:COMPUTERNAME)
-        $content = $script_HWID_BlobUpload.Replace('##GROUPTAG##', $groupTag).Replace('##SASURL##', $blobUrl)
-        $p = Write-TempScript -Content $content -Filename 'EOO_HWID_BlobUpload.ps1'
-        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-        Write-Console "HWID Blob Upload gestart voor GroupTag: $groupTag" 'start'
-    }
-}.GetNewClosure())
-
 # ── Console output panel (rechterkolom – in splitMain.Panel2) ────
 $lblConsoleHdr = New-Object System.Windows.Forms.Label
 $lblConsoleHdr.Text      = 'Log'
