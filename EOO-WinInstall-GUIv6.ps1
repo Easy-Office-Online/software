@@ -454,17 +454,18 @@ $pnlHeader.Location  = New-Object System.Drawing.Point(0, 0)
 $pnlHeader.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, $HDR_H)
 $pnlHeader.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 $pnlHeader.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 128)
-$pnlHeader.add_Paint({
+$pnlHeader.add_Paint(({
     param($s, $e)
     $g = $e.Graphics
-    Add-Type -AssemblyName System.Drawing
-    $rect   = New-Object System.Drawing.Rectangle(0, 0, [int]$this.Width, [int]$this.Height - 4)
+    $w = [int]$pnlHeader.Width
+    $h = [int]$pnlHeader.Height - 4
+    $rect   = New-Object System.Drawing.Rectangle(0, 0, $w, $h)
     $clrL   = [System.Drawing.Color]::FromArgb(0, 128, 128)
     $clrR   = [System.Drawing.Color]::FromArgb(0, 160, 160)
     $brush  = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $clrL, $clrR, [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal)
     $g.FillRectangle($brush, $rect)
     $brush.Dispose()
-})
+}).GetNewClosure())
 $form.Controls.Add($pnlHeader)
 
 # Onderste rand van header: grijs scheidslijn (Win95 stijl)
@@ -632,11 +633,11 @@ $pnlInfo = New-Object System.Windows.Forms.Panel
 $pnlInfo.Size      = New-Object System.Drawing.Size($INFO_W, $INFO_H)
 $pnlInfo.Location  = New-Object System.Drawing.Point(22, $INFO_Y)
 $pnlInfo.BackColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
-$pnlInfo.add_Paint({
+$pnlInfo.add_Paint(({
     param($s, $e)
     $g = $e.Graphics
-    $w = [int]$this.Width - 1
-    $h = [int]$this.Height - 1
+    $w = [int]$pnlInfo.Width - 1
+    $h = [int]$pnlInfo.Height - 1
     # Win95 sunken 3D rand (zoals een tekstvak of sunken panel)
     $penDarkOuter  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(128, 128, 128), 1)
     $penBlackInner = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 0, 0), 1)
@@ -654,7 +655,7 @@ $pnlInfo.add_Paint({
     $g.DrawLine($penLightInner, 1, $h-1, $w-1, $h-1)
     $penDarkOuter.Dispose(); $penBlackInner.Dispose()
     $penWhiteOuter.Dispose(); $penLightInner.Dispose()
-})
+}).GetNewClosure())
 $script:leftPanel.Controls.Add($pnlInfo)
 $script:fullWidthCtrls.Add($pnlInfo)
 
