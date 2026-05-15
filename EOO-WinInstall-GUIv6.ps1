@@ -63,65 +63,11 @@ pause
 '@
 
 $script_HWID_Overwrite = @'
-@echo off
-setlocal
-title Autopilot HWID Export (OVERWRITE)
-net session >nul 2>&1
-if not "%errorlevel%"=="0" ( echo Administrator vereist. & pause & exit /b 1 )
-set "GroupTag="
-set /p GroupTag=Voer GroupTag in (bijv: EOO-W11-FLEX): 
-if "%GroupTag%"=="" ( echo Geen GroupTag opgegeven. Stop. & pause & exit /b 1 )
-set "ExportPath=##SCRIPTDIR##Autopilot-%COMPUTERNAME%.csv"
-set "PS1=%TEMP%\Get-HWID-Autopilot-Overwrite.ps1"
-> "%PS1%" echo param([string]$GroupTag,[string]$OutFile)
->>"%PS1%" echo $ErrorActionPreference = 'Stop'
->>"%PS1%" echo $serial = (Get-CimInstance Win32_BIOS).SerialNumber
->>"%PS1%" echo $dev = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
->>"%PS1%" echo $hash = $dev.DeviceHardwareData
->>"%PS1%" echo if (-not $hash) { throw 'Hardware hash niet gevonden.' }
->>"%PS1%" echo if (Test-Path $OutFile) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
->>"%PS1%" echo $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
->>"%PS1%" echo $line = $serial + ',,' + $hash + ',' + $GroupTag + ','
->>"%PS1%" echo Set-Content -Path $OutFile -Value $header -Encoding UTF8
->>"%PS1%" echo Add-Content -Path $OutFile -Value $line -Encoding UTF8
->>"%PS1%" echo Write-Host "OK: CSV overschreven: $OutFile"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -GroupTag "%GroupTag%" -OutFile "%ExportPath%"
-pause
-endlocal
-'@
-
-$script_HWID_Append = @'
-@echo off
-setlocal
-title Autopilot HWID Export (APPEND)
-net session >nul 2>&1
-if not "%errorlevel%"=="0" ( echo Administrator vereist. & pause & exit /b 1 )
-set "GroupTag="
-set /p GroupTag=Voer GroupTag in (bijv: EOO-W11-FLEX): 
-if "%GroupTag%"=="" ( echo Geen GroupTag opgegeven. Stop. & pause & exit /b 1 )
-set "ExportPath=##SCRIPTDIR##Autopilot-Bulk.csv"
-set "PS1=%TEMP%\Get-HWID-Autopilot-Append.ps1"
-> "%PS1%" echo param([string]$GroupTag,[string]$OutFile)
->>"%PS1%" echo $ErrorActionPreference = 'Stop'
->>"%PS1%" echo $serial = (Get-CimInstance Win32_BIOS).SerialNumber
->>"%PS1%" echo $dev = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
->>"%PS1%" echo $hash = $dev.DeviceHardwareData
->>"%PS1%" echo if (-not $hash) { throw 'Hardware hash niet gevonden.' }
->>"%PS1%" echo $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
->>"%PS1%" echo $line = $serial + ',,' + $hash + ',' + $GroupTag + ','
->>"%PS1%" echo if (-not (Test-Path $OutFile)) { Set-Content -Path $OutFile -Value $header -Encoding UTF8 }
->>"%PS1%" echo Add-Content -Path $OutFile -Value $line -Encoding UTF8
->>"%PS1%" echo Write-Host "OK: Regel toegevoegd aan: $OutFile"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -GroupTag "%GroupTag%" -OutFile "%ExportPath%"
-pause
-endlocal
-'@
-
-$script_HWID_BlobUpload = @'
 $ErrorActionPreference = 'Stop'
-$GroupTag = '##GROUPTAG##'
-$sasUrl   = '##SASURL##'
-$file     = "$env:TEMP\Autopilot-$env:COMPUTERNAME.csv"
+$GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
+if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
+$sasUrl = '##SASURL##'
+$file   = "$env:TEMP\Autopilot-$env:COMPUTERNAME.csv"
 try {
     Write-Host "HWID ophalen..."
     $serial = (Get-CimInstance Win32_BIOS).SerialNumber
@@ -136,6 +82,32 @@ try {
     Write-Host "Uploaden naar Azure Blob..."
     Invoke-RestMethod -Uri $sasUrl -Method Put -InFile $file -Headers @{ 'x-ms-blob-type' = 'BlockBlob' }
     Write-Host "OK: HWID geupload naar Azure Blob." -ForegroundColor Green
+} catch {
+    Write-Host "FOUT: $_" -ForegroundColor Red
+}
+Read-Host "Druk op Enter om te sluiten"
+'@
+
+$script_HWID_Append = @'
+$ErrorActionPreference = 'Stop'
+$GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
+if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
+$sasUrl = '##SASURL##'
+$file   = '##OUTFILE##'
+try {
+    Write-Host "HWID ophalen..."
+    $serial = (Get-CimInstance Win32_BIOS).SerialNumber
+    $dev    = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
+    $hash   = $dev.DeviceHardwareData
+    if (-not $hash) { throw 'Hardware hash niet gevonden.' }
+    $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
+    $line   = $serial + ',,' + $hash + ',' + $GroupTag + ','
+    if (-not (Test-Path $file)) { Set-Content -Path $file -Value $header -Encoding UTF8 }
+    Add-Content -Path $file -Value $line -Encoding UTF8
+    Write-Host "Regel toegevoegd aan: $file"
+    Write-Host "Uploaden naar Azure Blob..."
+    Invoke-RestMethod -Uri $sasUrl -Method Put -InFile $file -Headers @{ 'x-ms-blob-type' = 'BlockBlob' }
+    Write-Host "OK: Bulk CSV geupload naar Azure Blob." -ForegroundColor Green
 } catch {
     Write-Host "FOUT: $_" -ForegroundColor Red
 }
@@ -427,21 +399,6 @@ function New-ThumbBitmap {
     return $bmp
 }
 
-
-# Wolk-bitmap (16x16) voor Blob Upload knop
-function New-CloudBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $g.FillRectangle($brush, 2, 9, 12, 4)
-    $g.FillEllipse($brush, 1,  6, 6, 6)
-    $g.FillEllipse($brush, 5,  4, 6, 6)
-    $g.FillEllipse($brush, 9,  6, 5, 5)
-    $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
 
 function New-IconBox {
     param([System.Drawing.Bitmap]$Bmp, [int]$X, [int]$Y, [int]$Size = 16)
@@ -1147,22 +1104,34 @@ $btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 ($SECT_Y +
 Add-BtnIcon $btnHWIDOvr (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDOvr)
 $btnHWIDOvr.Add_Click({
-    Write-Console 'HWID Export (Overwrite) wordt gestart...' 'start'
-    $exportDir = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
-    $p = Write-TempScript -Content ($script_HWID_Overwrite -replace '##SCRIPTDIR##', $exportDir) -Filename 'EOO_Get-HWID.cmd'
-    Start-Process 'cmd.exe' -ArgumentList "/k `"$p`"" -Verb RunAs
-    Write-Console "HWID Export: CSV wordt opgeslagen in: $exportDir" 'info'
+    if (-not $script:azureBlobSasUrl) {
+        [System.Windows.Forms.MessageBox]::Show('Stel $script:azureBlobSasUrl in bovenin het script.', 'SAS URL niet ingesteld', 'OK', 'Warning') | Out-Null
+        return
+    }
+    Write-Console 'HWID Export + Blob Upload (Overwrite) wordt gestart...' 'start'
+    $blobUrl = $script:azureBlobSasUrl.Replace('##COMPUTERNAME##', $env:COMPUTERNAME)
+    $content = $script_HWID_Overwrite.Replace('##SASURL##', $blobUrl)
+    $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID.ps1'
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
+    Write-Console "HWID Blob Upload (Overwrite) gestart." 'info'
 })
 
 $btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 ($SECT_Y + 554)
 Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDApp)
 $btnHWIDApp.Add_Click({
-    Write-Console 'HWID Export (Append) wordt gestart...' 'start'
+    if (-not $script:azureBlobSasUrl) {
+        [System.Windows.Forms.MessageBox]::Show('Stel $script:azureBlobSasUrl in bovenin het script.', 'SAS URL niet ingesteld', 'OK', 'Warning') | Out-Null
+        return
+    }
+    Write-Console 'HWID Export + Blob Upload (Append) wordt gestart...' 'start'
     $exportDir = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
-    $p = Write-TempScript -Content ($script_HWID_Append -replace '##SCRIPTDIR##', $exportDir) -Filename 'EOO_Get-HWID_Aanvullen.cmd'
-    Start-Process 'cmd.exe' -ArgumentList "/k `"$p`"" -Verb RunAs
-    Write-Console "HWID Export: CSV wordt opgeslagen in: $exportDir" 'info'
+    $outFile   = "${exportDir}Autopilot-Bulk.csv"
+    $blobUrl   = $script:azureBlobSasUrl.Replace('##COMPUTERNAME##', 'Bulk')
+    $content   = $script_HWID_Append.Replace('##SASURL##', $blobUrl).Replace('##OUTFILE##', $outFile)
+    $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID_Aanvullen.ps1'
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
+    Write-Console "HWID Blob Upload (Append) gestart." 'info'
 })
 
 $btnHWIDBlob = New-EOOButton 'HWID Export + Upload naar Azure Blob' 22 ($SECT_Y + 596)
