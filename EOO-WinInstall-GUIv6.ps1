@@ -6,13 +6,8 @@
 $script:currentVersion = [System.Version]'6.0'
 $script:versionName    = 'Pizza Funghi'
 
-# ── Azure Drive configuratie (hier aanpassen) ─────────────────────
-# Vereist Azure Files (SMB-share) — NIET Blob Storage.
-# Laat $azureKey leeg om de sleutel handmatig in te voeren via het dialoogvenster.
-$script:azureAccountName = ''   # Storage Account naam   (bijv: 'mijnbedrijf')
-$script:azureShareName   = ''   # Azure Files share naam (bijv: 'tools')
-$script:azureDriveLetter = 'X'  # Stationsletter (A–Z)
-$script:azureKey         = ''   # Access key (optioneel; leeg = handmatig invullen)
+# ── Azure Blob configuratie (hier aanpassen) ──────────────────────
+$script:azureBlobSasUrl  = ''   # SAS URL voor HWID Blob upload; gebruik ##COMPUTERNAME## als placeholder voor de bestandsnaam
 
 # UAC elevatie – herstart als admin indien nodig
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -122,6 +117,31 @@ pause
 endlocal
 '@
 
+$script_HWID_BlobUpload = @'
+$ErrorActionPreference = 'Stop'
+$GroupTag = '##GROUPTAG##'
+$sasUrl   = '##SASURL##'
+$file     = "$env:TEMP\Autopilot-$env:COMPUTERNAME.csv"
+try {
+    Write-Host "HWID ophalen..."
+    $serial = (Get-CimInstance Win32_BIOS).SerialNumber
+    $dev    = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
+    $hash   = $dev.DeviceHardwareData
+    if (-not $hash) { throw 'Hardware hash niet gevonden.' }
+    $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
+    $line   = $serial + ',,' + $hash + ',' + $GroupTag + ','
+    Set-Content -Path $file -Value $header -Encoding UTF8
+    Add-Content -Path $file -Value $line   -Encoding UTF8
+    Write-Host "CSV aangemaakt: $file"
+    Write-Host "Uploaden naar Azure Blob..."
+    Invoke-RestMethod -Uri $sasUrl -Method Put -InFile $file -Headers @{ 'x-ms-blob-type' = 'BlockBlob' }
+    Write-Host "OK: HWID geupload naar Azure Blob." -ForegroundColor Green
+} catch {
+    Write-Host "FOUT: $_" -ForegroundColor Red
+}
+Read-Host "Druk op Enter om te sluiten"
+'@
+
 function Write-TempScript {
     param([string]$Content, [string]$Filename)
     $path = Join-Path $env:TEMP $Filename
@@ -160,8 +180,6 @@ try {
 
 $script:remoteVersion   = $null
 $script:githubScriptUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/EOO-WinInstall-GUI.ps1'
-
-$script:azureDriveMounted = $false
 
 # ── Layout constanten ─────────────────────────────────────────────
 $HDR_H       = 110   # header hoogte
@@ -410,7 +428,7 @@ function New-ThumbBitmap {
 }
 
 
-# Wolk-bitmap (16x16) voor Azure Drive knop
+# Wolk-bitmap (16x16) voor Blob Upload knop
 function New-CloudBitmap {
     param([System.Drawing.Color]$Color)
     $bmp = New-Object System.Drawing.Bitmap(16, 16)
@@ -1130,9 +1148,7 @@ Add-BtnIcon $btnHWIDOvr (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDOvr)
 $btnHWIDOvr.Add_Click({
     Write-Console 'HWID Export (Overwrite) wordt gestart...' 'start'
-    $scriptDir  = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
-    $azurePath  = "$($script:azureDriveLetter):\HWID\"
-    $exportDir  = if ($script:azureDriveMounted -and (Test-Path $azurePath)) { $azurePath } else { $scriptDir }
+    $exportDir = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
     $p = Write-TempScript -Content ($script_HWID_Overwrite -replace '##SCRIPTDIR##', $exportDir) -Filename 'EOO_Get-HWID.cmd'
     Start-Process 'cmd.exe' -ArgumentList "/k `"$p`"" -Verb RunAs
     Write-Console "HWID Export: CSV wordt opgeslagen in: $exportDir" 'info'
@@ -1143,130 +1159,73 @@ Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDApp)
 $btnHWIDApp.Add_Click({
     Write-Console 'HWID Export (Append) wordt gestart...' 'start'
-    $scriptDir  = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
-    $azurePath  = "$($script:azureDriveLetter):\HWID\"
-    $exportDir  = if ($script:azureDriveMounted -and (Test-Path $azurePath)) { $azurePath } else { $scriptDir }
+    $exportDir = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
     $p = Write-TempScript -Content ($script_HWID_Append -replace '##SCRIPTDIR##', $exportDir) -Filename 'EOO_Get-HWID_Aanvullen.cmd'
     Start-Process 'cmd.exe' -ArgumentList "/k `"$p`"" -Verb RunAs
     Write-Console "HWID Export: CSV wordt opgeslagen in: $exportDir" 'info'
 })
 
-$script:btnAzureDrive = New-EOOButton 'Azure Drive koppelen...' 22 ($SECT_Y + 596)
-Add-BtnIcon $script:btnAzureDrive (New-CloudBitmap $clrAccent)
-$script:fullWidthCtrls.Add($script:btnAzureDrive)
-$script:btnAzureDrive.Add_Click({
-    $dlg = New-Object System.Windows.Forms.Form
-    $dlg.Text            = 'Azure Files - Drive koppelen'
-    $dlg.Size            = New-Object System.Drawing.Size(410, 280)
-    $dlg.StartPosition   = 'CenterParent'
-    $dlg.FormBorderStyle = 'FixedDialog'
-    $dlg.MaximizeBox     = $false
-    $dlg.MinimizeBox     = $false
-    $dlg.BackColor       = [System.Drawing.Color]::FromArgb(192, 192, 192)
-    $dlg.Font            = $fntLabel
+$btnHWIDBlob = New-EOOButton 'HWID Export + Upload naar Azure Blob' 22 ($SECT_Y + 596)
+Add-BtnIcon $btnHWIDBlob (New-CloudBitmap $clrAccent)
+$script:fullWidthCtrls.Add($btnHWIDBlob)
+$btnHWIDBlob.Add_Click({
+    $dlg2 = New-Object System.Windows.Forms.Form
+    $dlg2.Text            = 'HWID Blob Upload'
+    $dlg2.Size            = New-Object System.Drawing.Size(500, 210)
+    $dlg2.StartPosition   = 'CenterParent'
+    $dlg2.FormBorderStyle = 'FixedDialog'
+    $dlg2.MaximizeBox     = $false
+    $dlg2.MinimizeBox     = $false
+    $dlg2.BackColor       = [System.Drawing.Color]::FromArgb(192, 192, 192)
+    $dlg2.Font            = $fntLabel
 
-    $y = 12
+    $y2 = 12
+    $lGt = New-Object System.Windows.Forms.Label
+    $lGt.Text     = 'GroupTag (bijv: EOO-W11-FLEX):'
+    $lGt.Location = New-Object System.Drawing.Point(10, $y2); $lGt.AutoSize = $true
+    $dlg2.Controls.Add($lGt); $y2 += 18
+    $txtGt = New-Object System.Windows.Forms.TextBox
+    $txtGt.Location = New-Object System.Drawing.Point(10, $y2)
+    $txtGt.Size     = New-Object System.Drawing.Size(468, 22)
+    $dlg2.Controls.Add($txtGt); $y2 += 30
 
-    $lAcct = New-Object System.Windows.Forms.Label
-    $lAcct.Text = 'Storage Account naam:'; $lAcct.Location = New-Object System.Drawing.Point(10, $y); $lAcct.AutoSize = $true
-    $dlg.Controls.Add($lAcct); $y += 18
+    $lSas = New-Object System.Windows.Forms.Label
+    $lSas.Text     = 'SAS URL (gebruik ##COMPUTERNAME## als placeholder voor de bestandsnaam):'
+    $lSas.Location = New-Object System.Drawing.Point(10, $y2); $lSas.AutoSize = $true
+    $dlg2.Controls.Add($lSas); $y2 += 18
+    $txtSas = New-Object System.Windows.Forms.TextBox
+    $txtSas.Text     = $script:azureBlobSasUrl
+    $txtSas.Location = New-Object System.Drawing.Point(10, $y2)
+    $txtSas.Size     = New-Object System.Drawing.Size(468, 22)
+    $dlg2.Controls.Add($txtSas); $y2 += 34
 
-    $txtAcct = New-Object System.Windows.Forms.TextBox
-    $txtAcct.Location = New-Object System.Drawing.Point(10, $y); $txtAcct.Width = 375; $txtAcct.Text = $script:azureAccountName
-    $dlg.Controls.Add($txtAcct); $y += 30
+    $btnOk2 = New-Object System.Windows.Forms.Button
+    $btnOk2.Text         = 'Uploaden'
+    $btnOk2.Location     = New-Object System.Drawing.Point(10, $y2)
+    $btnOk2.Size         = New-Object System.Drawing.Size(100, 26)
+    $btnOk2.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $dlg2.Controls.Add($btnOk2)
+    $dlg2.AcceptButton = $btnOk2
 
-    $lKey = New-Object System.Windows.Forms.Label
-    $lKey.Text = 'Storage Account sleutel:'; $lKey.Location = New-Object System.Drawing.Point(10, $y); $lKey.AutoSize = $true
-    $dlg.Controls.Add($lKey); $y += 18
-
-    $txtKey = New-Object System.Windows.Forms.TextBox
-    $txtKey.Location = New-Object System.Drawing.Point(10, $y); $txtKey.Width = 375; $txtKey.UseSystemPasswordChar = $true
-    $txtKey.Text = $script:azureKey
-    $dlg.Controls.Add($txtKey); $y += 30
-
-    $lShare = New-Object System.Windows.Forms.Label
-    $lShare.Text = 'Bestandsshare naam (Azure Files):'; $lShare.Location = New-Object System.Drawing.Point(10, $y); $lShare.AutoSize = $true
-    $dlg.Controls.Add($lShare); $y += 18
-
-    $txtShare = New-Object System.Windows.Forms.TextBox
-    $txtShare.Location = New-Object System.Drawing.Point(10, $y); $txtShare.Width = 270; $txtShare.Text = $script:azureShareName
-    $dlg.Controls.Add($txtShare)
-
-    $lDrv = New-Object System.Windows.Forms.Label
-    $lDrv.Text = 'Station:'; $lDrv.Location = New-Object System.Drawing.Point(290, $y); $lDrv.AutoSize = $true
-    $dlg.Controls.Add($lDrv)
-    $txtDrv = New-Object System.Windows.Forms.TextBox
-    $txtDrv.Location = New-Object System.Drawing.Point(335, $y); $txtDrv.Width = 28; $txtDrv.MaxLength = 1
-    $txtDrv.Text = $script:azureDriveLetter
-    $dlg.Controls.Add($txtDrv); $y += 30
-
-    $lInfo = New-Object System.Windows.Forms.Label
-    $lInfo.Text = 'Vereist Azure Files (SMB-share), niet Blob Storage.'
-    $lInfo.ForeColor = [System.Drawing.Color]::FromArgb(128, 0, 0)
-    $lInfo.Location = New-Object System.Drawing.Point(10, $y); $lInfo.AutoSize = $true
-    $dlg.Controls.Add($lInfo); $y += 26
-
-    $btnM = New-Object System.Windows.Forms.Button
-    $btnM.Text = 'Koppelen'; $btnM.Location = New-Object System.Drawing.Point(10, $y)
-    $btnM.Size = New-Object System.Drawing.Size(90, 26); $btnM.FlatStyle = 'Flat'
-    $dlg.Controls.Add($btnM)
-
-    $btnU = New-Object System.Windows.Forms.Button
-    $btnU.Text = 'Ontkoppelen'; $btnU.Location = New-Object System.Drawing.Point(108, $y)
-    $btnU.Size = New-Object System.Drawing.Size(100, 26); $btnU.FlatStyle = 'Flat'
-    $btnU.Enabled = $script:azureDriveMounted
-    $dlg.Controls.Add($btnU)
-
-    $btnX = New-Object System.Windows.Forms.Button
-    $btnX.Text = 'Annuleren'; $btnX.Location = New-Object System.Drawing.Point(295, $y)
-    $btnX.Size = New-Object System.Drawing.Size(90, 26); $btnX.FlatStyle = 'Flat'
-    $dlg.CancelButton = $btnX
-    $dlg.Controls.Add($btnX)
-
-    $btnX.Add_Click({ $dlg.Close() }.GetNewClosure())
-
-    $btnM.Add_Click({
-        $account = $txtAcct.Text.Trim()
-        $key     = $txtKey.Text.Trim()
-        $share   = $txtShare.Text.Trim()
-        $letter  = ($txtDrv.Text.Trim().ToUpper() -replace '[^A-Z]', '')
-        if (-not $letter) { $letter = 'X' } else { $letter = $letter[0] }
-        if (-not $account -or -not $key -or -not $share) {
-            [System.Windows.Forms.MessageBox]::Show('Vul alle velden in.', 'Fout', 'OK', 'Warning') | Out-Null
+    if ($dlg2.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
+        $groupTag = $txtGt.Text.Trim()
+        $sasUrl   = $txtSas.Text.Trim()
+        if (-not $groupTag) {
+            [System.Windows.Forms.MessageBox]::Show('Voer een GroupTag in.', 'Fout', 'OK', 'Error') | Out-Null
             return
         }
-        $unc = "\\$account.file.core.windows.net\$share"
-        try {
-            Get-PSDrive -Name $letter -ErrorAction SilentlyContinue | Remove-PSDrive -Force -ErrorAction SilentlyContinue
-            $sec  = ConvertTo-SecureString $key -AsPlainText -Force
-            $cred = New-Object System.Management.Automation.PSCredential("Azure\$account", $sec)
-            New-PSDrive -Name $letter -PSProvider FileSystem -Root $unc -Credential $cred -Persist -ErrorAction Stop | Out-Null
-            $hwidPath = "${letter}:\HWID"
-            if (-not (Test-Path $hwidPath)) { New-Item -ItemType Directory -Path $hwidPath -Force | Out-Null }
-            $script:azureDriveLetter  = $letter
-            $script:azureDriveMounted = $true
-            $script:azureAccountName  = $account
-            $script:azureShareName    = $share
-            Write-Console "Azure Drive gekoppeld: ${letter}: [\\$account.file.core.windows.net\$share] → HWID CSV naar $hwidPath" 'ok'
-            $script:btnAzureDrive.Text = "Azure Drive: ${letter}: (gekoppeld)"
-            $dlg.Close()
-        } catch {
-            [System.Windows.Forms.MessageBox]::Show("Koppelen mislukt:`n$_", 'Fout', 'OK', 'Error') | Out-Null
+        if (-not $sasUrl) {
+            [System.Windows.Forms.MessageBox]::Show('Voer een SAS URL in.', 'Fout', 'OK', 'Error') | Out-Null
+            return
         }
-    }.GetNewClosure())
-
-    $btnU.Add_Click({
-        $letter = $script:azureDriveLetter
-        Get-PSDrive -Name $letter -ErrorAction SilentlyContinue | Remove-PSDrive -Force -ErrorAction SilentlyContinue
-        & net use "${letter}:" /delete /y 2>&1 | Out-Null
-        $script:azureDriveMounted = $false
-        Write-Console "Azure Drive ${letter}: ontkoppeld." 'info'
-        $script:btnAzureDrive.Text = 'Azure Drive koppelen...'
-        $dlg.Close()
-    }.GetNewClosure())
-
-    $dlg.ShowDialog($form) | Out-Null
-})
+        $script:azureBlobSasUrl = $sasUrl
+        $blobUrl = $sasUrl.Replace('##COMPUTERNAME##', $env:COMPUTERNAME)
+        $content = $script_HWID_BlobUpload.Replace('##GROUPTAG##', $groupTag).Replace('##SASURL##', $blobUrl)
+        $p = Write-TempScript -Content $content -Filename 'EOO_HWID_BlobUpload.ps1'
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
+        Write-Console "HWID Blob Upload gestart voor GroupTag: $groupTag" 'start'
+    }
+}.GetNewClosure())
 
 # ── Console output panel (rechterkolom – in splitMain.Panel2) ────
 $lblConsoleHdr = New-Object System.Windows.Forms.Label
