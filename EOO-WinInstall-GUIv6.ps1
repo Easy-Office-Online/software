@@ -6,14 +6,22 @@
 $script:currentVersion = [System.Version]'6.0'
 $script:versionName    = 'Pizza Funghi'
 
-# ── Azure Blob configuratie (hier aanpassen) ──────────────────────
-$script:azureBlobSasUrl  = ''   # SAS URL voor HWID Blob upload; gebruik ##COMPUTERNAME## als placeholder voor de bestandsnaam
+# ── Azure Files configuratie (hier aanpassen) ─────────────────────
+$script:afStorageAccount = 'staceoosupportools'
+$script:afShareName      = 'eoo-support-tools'
+$script:afKey            = '7wa9oZJDVh+cTcYDiOPOB1WCE0TEzpYe/BaqQlLA85jKga3g7AKC0zMjgYlTTjgVRgTuvfxpdnJq+AStoXQFlA=='
 
 # UAC elevatie – herstart als admin indien nodig
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
+
+# ── Azure Files share koppelen bij opstart (achtergrond) ──────────
+Start-Job -ScriptBlock {
+    param($sa, $sn, $k)
+    net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1 | Out-Null
+} -ArgumentList $script:afStorageAccount, $script:afShareName, $script:afKey | Out-Null
 
 $script_LenovoSU = @'
 @echo off
@@ -66,7 +74,9 @@ $script_HWID_Overwrite = @'
 $ErrorActionPreference = 'Stop'
 $GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
 if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
-$sasUrl = '##SASURL##'
+$storageAccount = '##STORAGEACCOUNT##'
+$shareName      = '##SHARENAME##'
+$key            = '##KEY##'
 $file   = "$env:TEMP\Autopilot-$env:COMPUTERNAME.csv"
 try {
     Write-Host "HWID ophalen..."
@@ -79,9 +89,13 @@ try {
     Set-Content -Path $file -Value $header -Encoding UTF8
     Add-Content -Path $file -Value $line   -Encoding UTF8
     Write-Host "CSV aangemaakt: $file"
-    Write-Host "Uploaden naar Azure Blob..."
-    Invoke-RestMethod -Uri $sasUrl -Method Put -InFile $file -Headers @{ 'x-ms-blob-type' = 'BlockBlob' }
-    Write-Host "OK: HWID geupload naar Azure Blob." -ForegroundColor Green
+    Write-Host "Uploaden naar Azure Files..."
+    if (-not (Test-Path 'X:\')) {
+        net use X: "\\$storageAccount.file.core.windows.net\$shareName" /user:"Azure\$storageAccount" $key /persistent:no | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Kan Azure Files share niet bereiken. Controleer poort 445." }
+    }
+    Copy-Item -Path $file -Destination "X:\$env:COMPUTERNAME.csv" -Force
+    Write-Host "OK: HWID gekopieerd naar Azure Files." -ForegroundColor Green
 } catch {
     Write-Host "FOUT: $_" -ForegroundColor Red
 }
@@ -92,7 +106,9 @@ $script_HWID_Append = @'
 $ErrorActionPreference = 'Stop'
 $GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
 if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
-$sasUrl = '##SASURL##'
+$storageAccount = '##STORAGEACCOUNT##'
+$shareName      = '##SHARENAME##'
+$key            = '##KEY##'
 $file   = '##OUTFILE##'
 try {
     Write-Host "HWID ophalen..."
@@ -105,9 +121,13 @@ try {
     if (-not (Test-Path $file)) { Set-Content -Path $file -Value $header -Encoding UTF8 }
     Add-Content -Path $file -Value $line -Encoding UTF8
     Write-Host "Regel toegevoegd aan: $file"
-    Write-Host "Uploaden naar Azure Blob..."
-    Invoke-RestMethod -Uri $sasUrl -Method Put -InFile $file -Headers @{ 'x-ms-blob-type' = 'BlockBlob' }
-    Write-Host "OK: Bulk CSV geupload naar Azure Blob." -ForegroundColor Green
+    Write-Host "Uploaden naar Azure Files..."
+    if (-not (Test-Path 'X:\')) {
+        net use X: "\\$storageAccount.file.core.windows.net\$shareName" /user:"Azure\$storageAccount" $key /persistent:no | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Kan Azure Files share niet bereiken. Controleer poort 445." }
+    }
+    Copy-Item -Path $file -Destination "X:\$env:COMPUTERNAME.csv" -Force
+    Write-Host "OK: Bulk CSV gekopieerd naar Azure Files." -ForegroundColor Green
 } catch {
     Write-Host "FOUT: $_" -ForegroundColor Red
 }
@@ -1104,34 +1124,24 @@ $btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 ($SECT_Y +
 Add-BtnIcon $btnHWIDOvr (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDOvr)
 $btnHWIDOvr.Add_Click({
-    if (-not $script:azureBlobSasUrl) {
-        [System.Windows.Forms.MessageBox]::Show('Stel $script:azureBlobSasUrl in bovenin het script.', 'SAS URL niet ingesteld', 'OK', 'Warning') | Out-Null
-        return
-    }
-    Write-Console 'HWID Export + Blob Upload (Overwrite) wordt gestart...' 'start'
-    $blobUrl = $script:azureBlobSasUrl.Replace('##COMPUTERNAME##', $env:COMPUTERNAME)
-    $content = $script_HWID_Overwrite.Replace('##SASURL##', $blobUrl)
+    Write-Console 'HWID Export + Azure Files Upload (Overwrite) wordt gestart...' 'start'
+    $content = $script_HWID_Overwrite.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-    Write-Console "HWID Blob Upload (Overwrite) gestart." 'info'
+    Write-Console "HWID Azure Files Upload (Overwrite) gestart." 'info'
 })
 
 $btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 ($SECT_Y + 554)
 Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDApp)
 $btnHWIDApp.Add_Click({
-    if (-not $script:azureBlobSasUrl) {
-        [System.Windows.Forms.MessageBox]::Show('Stel $script:azureBlobSasUrl in bovenin het script.', 'SAS URL niet ingesteld', 'OK', 'Warning') | Out-Null
-        return
-    }
-    Write-Console 'HWID Export + Blob Upload (Append) wordt gestart...' 'start'
+    Write-Console 'HWID Export + Azure Files Upload (Append) wordt gestart...' 'start'
     $exportDir = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
     $outFile   = "${exportDir}Autopilot-Bulk.csv"
-    $blobUrl   = $script:azureBlobSasUrl.Replace('##COMPUTERNAME##', 'Bulk')
-    $content   = $script_HWID_Append.Replace('##SASURL##', $blobUrl).Replace('##OUTFILE##', $outFile)
+    $content   = $script_HWID_Append.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey).Replace('##OUTFILE##', $outFile)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID_Aanvullen.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-    Write-Console "HWID Blob Upload (Append) gestart." 'info'
+    Write-Console "HWID Azure Files Upload (Append) gestart." 'info'
 })
 
 # ── Console output panel (rechterkolom – in splitMain.Panel2) ────
