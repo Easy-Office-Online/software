@@ -17,11 +17,6 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit
 }
 
-# ── Azure Files share koppelen bij opstart (achtergrond) ──────────
-Start-Job -ScriptBlock {
-    param($sa, $sn, $k)
-    net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1 | Out-Null
-} -ArgumentList $script:afStorageAccount, $script:afShareName, $script:afKey | Out-Null
 
 $script_LenovoSU = @'
 @echo off
@@ -1169,20 +1164,38 @@ $script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y +
 Add-BtnIcon $script:btnAzureMount (New-CloudBitmap $clrAccent)
 $script:fullWidthCtrls.Add($script:btnAzureMount)
 $script:btnAzureMount.Add_Click({
+    $script:btnAzureMount.Enabled = $false
+    Write-Console '─── Azure opslag koppelen ───' 'start'
+
+    # Controleer of X: al bestaat
     if (Test-Path 'X:\') {
-        Write-Console '[OK] Azure opslag is al gekoppeld op X:\' 'ok'
+        $netInfo = (& net use X: 2>&1) -join ' '
+        Write-Console '[OK] X:\ is al gekoppeld.' 'ok'
+        Write-Console "     $netInfo" 'info'
+        Write-Console '     Koppeling is actief voor deze sessie (verdwijnt na herstart).' 'info'
+        $script:btnAzureMount.Enabled = $true
         return
     }
-    $script:btnAzureMount.Enabled = $false
-    Write-Console 'Azure opslag koppelen...' 'start'
+
+    Write-Console 'X:\ niet gevonden, koppelen...' 'info'
+    Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
+    Write-Console "  Share           : $($script:afShareName)" 'info'
+    Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
 
     $script:jobAzureMount = Start-Job -ScriptBlock {
         param($sa, $sn, $k)
-        $out = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Output '[OK] Gekoppeld op X:\'
+        $out      = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1
+        $exitCode = $LASTEXITCODE
+        Write-Output "EXITCODE:$exitCode"
+        foreach ($line in $out) {
+            if ($line -and $line.ToString().Trim()) {
+                Write-Output "NETUSE:$($line.ToString().Trim())"
+            }
+        }
+        if ($exitCode -eq 0) {
+            Write-Output 'STATUS:OK'
         } else {
-            throw "Koppelen mislukt: $($out -join ' ')"
+            Write-Output 'STATUS:FAIL'
         }
     } -ArgumentList $script:afStorageAccount, $script:afShareName, $script:afKey
 
@@ -1190,20 +1203,30 @@ $script:btnAzureMount.Add_Click({
     $script:timerAzureMount.Interval = 500
     $script:timerAzureMount.Add_Tick({
         foreach ($line in ($script:jobAzureMount.ChildJobs[0].Output.ReadAll())) {
-            if ($line -match '^\[OK\]') { Write-Console "$line (tijdelijk, verdwijnt na herstart)" 'ok' }
-            else                        { Write-Console $line 'info' }
-        }
-        foreach ($err in ($script:jobAzureMount.ChildJobs[0].Error.ReadAll())) {
-            Write-Console "FOUT: $($err.Exception.Message)" 'error'
+            if     ($line -match '^EXITCODE:(.+)')  {
+                $ec = $matches[1]
+                Write-Console "  net use exit code: $ec" (if ($ec -eq '0') { 'info' } else { 'error' })
+            }
+            elseif ($line -match '^NETUSE:(.+)')    { Write-Console "  net use: $($matches[1])" 'info' }
+            elseif ($line -eq 'STATUS:OK')          {
+                Write-Console '[OK] Azure opslag gekoppeld op X:\' 'ok'
+                Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+            }
+            elseif ($line -eq 'STATUS:FAIL')        {
+                Write-Console 'FOUT: koppelen mislukt (zie net use output hierboven).' 'error'
+                Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+            }
         }
         if ($script:jobAzureMount.State -in 'Completed','Failed') {
             $script:timerAzureMount.Stop()
             $script:timerAzureMount.Dispose()
             if ($script:jobAzureMount.State -eq 'Failed') {
-                Write-Console "FOUT: $($script:jobAzureMount.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
+                $reason = $script:jobAzureMount.ChildJobs[0].JobStateInfo.Reason.Message
+                Write-Console "FOUT (job gestopt): $reason" 'error'
             }
             Remove-Job $script:jobAzureMount -Force
             $script:btnAzureMount.Enabled = $true
+            Write-Console '─────────────────────────────' 'info'
         }
     })
     $script:timerAzureMount.Start()
