@@ -94,8 +94,9 @@ try {
         net use X: "\\$storageAccount.file.core.windows.net\$shareName" /user:"Azure\$storageAccount" $key /persistent:no | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Kan Azure Files share niet bereiken. Controleer poort 445." }
     }
-    Copy-Item -Path $file -Destination "X:\$env:COMPUTERNAME.csv" -Force
-    Write-Host "OK: HWID gekopieerd naar Azure Files." -ForegroundColor Green
+    if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
+    Copy-Item -Path $file -Destination "X:\HWID\$env:COMPUTERNAME.csv" -Force
+    Write-Host "OK: HWID gekopieerd naar Azure Files map HWID." -ForegroundColor Green
 } catch {
     Write-Host "FOUT: $_" -ForegroundColor Red
 }
@@ -106,10 +107,12 @@ $script_HWID_Append = @'
 $ErrorActionPreference = 'Stop'
 $GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
 if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
+$BatchName = Read-Host 'Voer batch naam in (bijv: Batch-01 of School-A)'
+if (-not $BatchName) { Write-Host 'Geen batch naam opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
 $storageAccount = '##STORAGEACCOUNT##'
 $shareName      = '##SHARENAME##'
 $key            = '##KEY##'
-$file   = '##OUTFILE##'
+$file = "$env:TEMP\Autopilot-$BatchName.csv"
 try {
     Write-Host "HWID ophalen..."
     $serial = (Get-CimInstance Win32_BIOS).SerialNumber
@@ -126,8 +129,9 @@ try {
         net use X: "\\$storageAccount.file.core.windows.net\$shareName" /user:"Azure\$storageAccount" $key /persistent:no | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Kan Azure Files share niet bereiken. Controleer poort 445." }
     }
-    Copy-Item -Path $file -Destination "X:\$env:COMPUTERNAME.csv" -Force
-    Write-Host "OK: Bulk CSV gekopieerd naar Azure Files." -ForegroundColor Green
+    if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
+    Copy-Item -Path $file -Destination "X:\HWID\$BatchName.csv" -Force
+    Write-Host "OK: Bulk CSV gekopieerd naar Azure Files map HWID als $BatchName.csv." -ForegroundColor Green
 } catch {
     Write-Host "FOUT: $_" -ForegroundColor Red
 }
@@ -419,6 +423,22 @@ function New-ThumbBitmap {
     return $bmp
 }
 
+
+# Cloud/opslag (16x16) voor Azure schijfkoppeling
+function New-CloudBitmap {
+    param([System.Drawing.Color]$Color)
+    $bmp = New-Object System.Drawing.Bitmap(16, 16)
+    $g   = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = 'AntiAlias'
+    $brush = New-Object System.Drawing.SolidBrush($Color)
+    $g.FillEllipse($brush, 1,  7, 6, 6)
+    $g.FillEllipse($brush, 8,  8, 6, 5)
+    $g.FillEllipse($brush, 4,  4, 8, 8)
+    $rect = New-Object System.Drawing.Rectangle(2, 10, 12, 3)
+    $g.FillRectangle($brush, $rect)
+    $brush.Dispose(); $g.Dispose()
+    return $bmp
+}
 
 function New-IconBox {
     param([System.Drawing.Bitmap]$Bmp, [int]$X, [int]$Y, [int]$Size = 16)
@@ -1136,12 +1156,57 @@ Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDApp)
 $btnHWIDApp.Add_Click({
     Write-Console 'HWID Export + Azure Files Upload (Append) wordt gestart...' 'start'
-    $exportDir = if ($PSScriptRoot) { $PSScriptRoot + '\' } else { (Split-Path -Parent $MyInvocation.ScriptName) + '\' }
-    $outFile   = "${exportDir}Autopilot-Bulk.csv"
-    $content   = $script_HWID_Append.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey).Replace('##OUTFILE##', $outFile)
+    $content = $script_HWID_Append.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID_Aanvullen.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
     Write-Console "HWID Azure Files Upload (Append) gestart." 'info'
+})
+
+# ── Sectie: Azure opslag ─────────────────────────────────────────
+New-SectionLabel 'Azure opslag' ($SECT_Y + 596)
+
+$script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y + 620)
+Add-BtnIcon $script:btnAzureMount (New-CloudBitmap $clrAccent)
+$script:fullWidthCtrls.Add($script:btnAzureMount)
+$script:btnAzureMount.Add_Click({
+    if (Test-Path 'X:\') {
+        Write-Console '[OK] Azure opslag is al gekoppeld op X:\' 'ok'
+        return
+    }
+    $script:btnAzureMount.Enabled = $false
+    Write-Console 'Azure opslag koppelen...' 'start'
+
+    $script:jobAzureMount = Start-Job -ScriptBlock {
+        param($sa, $sn, $k)
+        $out = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Output '[OK] Gekoppeld op X:\'
+        } else {
+            throw "Koppelen mislukt: $($out -join ' ')"
+        }
+    } -ArgumentList $script:afStorageAccount, $script:afShareName, $script:afKey
+
+    $script:timerAzureMount = New-Object System.Windows.Forms.Timer
+    $script:timerAzureMount.Interval = 500
+    $script:timerAzureMount.Add_Tick({
+        foreach ($line in ($script:jobAzureMount.ChildJobs[0].Output.ReadAll())) {
+            if ($line -match '^\[OK\]') { Write-Console "$line (tijdelijk, verdwijnt na herstart)" 'ok' }
+            else                        { Write-Console $line 'info' }
+        }
+        foreach ($err in ($script:jobAzureMount.ChildJobs[0].Error.ReadAll())) {
+            Write-Console "FOUT: $($err.Exception.Message)" 'error'
+        }
+        if ($script:jobAzureMount.State -in 'Completed','Failed') {
+            $script:timerAzureMount.Stop()
+            $script:timerAzureMount.Dispose()
+            if ($script:jobAzureMount.State -eq 'Failed') {
+                Write-Console "FOUT: $($script:jobAzureMount.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
+            }
+            Remove-Job $script:jobAzureMount -Force
+            $script:btnAzureMount.Enabled = $true
+        }
+    })
+    $script:timerAzureMount.Start()
 })
 
 # ── Console output panel (rechterkolom – in splitMain.Panel2) ────
