@@ -1205,7 +1205,7 @@ $script:btnAzureMount.Add_Click({
         foreach ($line in ($script:jobAzureMount.ChildJobs[0].Output.ReadAll())) {
             if     ($line -match '^EXITCODE:(.+)')  {
                 $ec = $matches[1]
-                Write-Console "  net use exit code: $ec" (if ($ec -eq '0') { 'info' } else { 'error' })
+                Write-Console "  net use exit code: $ec" $(if ($ec -eq '0') { 'info' } else { 'error' })
             }
             elseif ($line -match '^NETUSE:(.+)')    { Write-Console "  net use: $($matches[1])" 'info' }
             elseif ($line -eq 'STATUS:OK')          {
@@ -1230,6 +1230,18 @@ $script:btnAzureMount.Add_Click({
         }
     })
     $script:timerAzureMount.Start()
+})
+
+# ── Sectie: Rapport ──────────────────────────────────────────────
+New-SectionLabel 'Rapport' ($SECT_Y + 662)
+
+$script:btnExportPDF = New-EOOButton 'Rapport exporteren als PDF' 22 ($SECT_Y + 686)
+Add-BtnIcon $script:btnExportPDF (New-DownArrowBitmap $clrAccent)
+$script:fullWidthCtrls.Add($script:btnExportPDF)
+$script:btnExportPDF.Add_Click({
+    $script:btnExportPDF.Enabled = $false
+    Write-Console 'Rapport als PDF exporteren...' 'start'
+    Export-RapportPDF
 })
 
 # ── Console output panel (rechterkolom – in splitMain.Panel2) ────
@@ -1509,6 +1521,177 @@ function Update-InfoPanel {
     Display-LaptopType
     Display-WifiAdapter
     Display-AllGoodThumb
+}
+
+function Export-RapportPDF {
+    $serial = try { (Get-CimInstance Win32_BIOS).SerialNumber.Trim() } catch { 'ONBEKEND' }
+    $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $safeSerial = $serial -replace '[\\/:*?"<>|]', '_'
+    $fn = "EOO_Rapport_${safeSerial}_${ts}.pdf"
+    $outputPath = Join-Path $env:TEMP $fn
+
+    $pdfPrinterAvail = [bool]([System.Drawing.Printing.PrinterSettings]::InstalledPrinters |
+        Where-Object { $_ -eq 'Microsoft Print to PDF' })
+    if (-not $pdfPrinterAvail) {
+        Write-Console 'FOUT: "Microsoft Print to PDF" printer niet gevonden op dit systeem.' 'error'
+        $script:btnExportPDF.Enabled = $true
+        return
+    }
+
+    $script:_pdfData = @{
+        Serial   = $serial
+        Computer = $env:COMPUTERNAME
+        Date     = Get-Date -Format 'dd-MM-yyyy HH:mm:ss'
+        Version  = $script:currentVersion
+        Logo     = $script:logoImage
+        Checks   = @(
+            @{ Label = $rowWin.Label.Text;    OK = $null }
+            @{ Label = $rowAct.Label.Text;    OK = $script:okActivation }
+            @{ Label = $rowTpm.Label.Text;    OK = $script:okTpm }
+            @{ Label = $rowBoot.Label.Text;   OK = $script:okSecureBoot }
+            @{ Label = $rowNet.Label.Text;    OK = $script:okInternet }
+            @{ Label = $rowHP.Label.Text;     OK = ($script:hpBloatFound.Count -eq 0) }
+            @{ Label = $rowLaptop.Label.Text; OK = $null }
+            @{ Label = $rowWifi.Label.Text;   OK = $script:okWifi }
+        )
+        Bloat    = @($script:hpBloatFound)
+    }
+
+    $pd = New-Object System.Drawing.Printing.PrintDocument
+    $pd.PrinterSettings.PrinterName  = 'Microsoft Print to PDF'
+    $pd.PrinterSettings.PrintToFile  = $true
+    $pd.PrinterSettings.PrintFileName = $outputPath
+
+    $pd.Add_PrintPage({
+        param($s2, $ev)
+        $d   = $script:_pdfData
+        $g   = $ev.Graphics
+        $lm  = [float]$ev.MarginBounds.Left
+        $tm  = [float]$ev.MarginBounds.Top
+        $pw  = [float]$ev.MarginBounds.Width
+
+        $fTitle   = New-Object System.Drawing.Font('Arial', 16, [System.Drawing.FontStyle]::Bold)
+        $fSub     = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Italic)
+        $fSection = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
+        $fCheck   = New-Object System.Drawing.Font('Arial', 10)
+        $fSmall   = New-Object System.Drawing.Font('Arial', 9)
+
+        $bBlack = [System.Drawing.Brushes]::Black
+        $bGreen = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 0))
+        $bRed   = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(192, 0, 0))
+        $bGray  = [System.Drawing.Brushes]::DimGray
+        $bTeal  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 128))
+        $penLine = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 128, 128), 2)
+
+        $y = $tm
+
+        # Logo rechts bovenaan
+        if ($null -ne $d.Logo) {
+            $logoH = [int]48
+            $logoW = [int]($d.Logo.Width * $logoH / $d.Logo.Height)
+            $logoX = [int]($lm + $pw - $logoW)
+            $g.DrawImage($d.Logo, (New-Object System.Drawing.Rectangle($logoX, [int]$tm, $logoW, $logoH)))
+        }
+
+        $g.DrawString('EOO Windows Installatie Rapport', $fTitle, $bTeal, $lm, $y)
+        $y += 34
+        $g.DrawString("Datum: $($d.Date)", $fSub, $bGray, $lm, $y)
+        $y += 20
+        $g.DrawString("Computer: $($d.Computer)   |   Serienummer: $($d.Serial)", $fSub, $bGray, $lm, $y)
+        $y += 28
+        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
+        $y += 16
+        $g.DrawString('Systeemcontroles', $fSection, $bBlack, $lm, $y)
+        $y += 28
+
+        foreach ($chk in $d.Checks) {
+            if ($null -eq $chk.OK) {
+                $sym = "$([char]0x25CF)"
+                $g.DrawString("$sym  $($chk.Label)", $fCheck, $bGray, $lm, $y)
+            } elseif ($chk.OK) {
+                $sym = "$([char]0x2713)"
+                $g.DrawString("$sym  $($chk.Label)", $fCheck, $bGreen, $lm, $y)
+            } else {
+                $sym = "$([char]0x2717)"
+                $g.DrawString("$sym  $($chk.Label)", $fCheck, $bRed, $lm, $y)
+            }
+            $y += 22
+        }
+
+        if ($d.Bloat.Count -gt 0) {
+            $y += 8
+            foreach ($item in $d.Bloat) {
+                $g.DrawString("     - $item", $fSmall, $bRed, $lm, $y)
+                $y += 18
+            }
+        }
+
+        $y += 24
+        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
+        $y += 12
+        $g.DrawString("Gegenereerd door EOO Windows Installatie Tool v$($d.Version)", $fSmall, $bGray, $lm, $y)
+
+        $penLine.Dispose()
+        $bGreen.Dispose(); $bRed.Dispose(); $bTeal.Dispose()
+        $fTitle.Dispose(); $fSub.Dispose(); $fSection.Dispose(); $fCheck.Dispose(); $fSmall.Dispose()
+        $ev.HasMorePages = $false
+    })
+
+    try {
+        $pd.Print()
+        Write-Console 'PDF gereed, uploaden naar Azure Files...' 'info'
+
+        $script:_jobPdfUpload = Start-Job -ScriptBlock {
+            param($localPath, $sa, $sn, $k)
+            # Wacht tot PDF op schijf staat (spooler kan even nalopen)
+            $waited = 0
+            while (-not (Test-Path $localPath) -and $waited -lt 30) {
+                Start-Sleep -Milliseconds 500
+                $waited++
+            }
+            if (-not (Test-Path $localPath)) { throw 'PDF niet beschikbaar na 15 seconden.' }
+            $fn = [System.IO.Path]::GetFileName($localPath)
+            if (-not (Test-Path 'X:\')) {
+                $out = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1
+                if ($LASTEXITCODE -ne 0) { throw "Azure Files koppelen mislukt: $($out -join ' ')" }
+            }
+            $rapDir = 'X:\Rapporten'
+            if (-not (Test-Path $rapDir)) { New-Item -ItemType Directory -Path $rapDir | Out-Null }
+            Copy-Item -Path $localPath -Destination "$rapDir\$fn" -Force
+            Remove-Item $localPath -Force -ErrorAction SilentlyContinue
+            Write-Output "OK:$fn"
+        } -ArgumentList $outputPath, $script:afStorageAccount, $script:afShareName, $script:afKey
+
+        $script:_timerPdfUpload = New-Object System.Windows.Forms.Timer
+        $script:_timerPdfUpload.Interval = 500
+        $script:_timerPdfUpload.Add_Tick({
+            foreach ($line in ($script:_jobPdfUpload.ChildJobs[0].Output.ReadAll())) {
+                if ($line -match '^OK:(.+)') {
+                    Write-Console "[OK] Geupload naar Azure Files: Rapporten\$($matches[1])" 'ok'
+                }
+            }
+            foreach ($err in ($script:_jobPdfUpload.ChildJobs[0].Error.ReadAll())) {
+                Write-Console "FOUT upload: $($err.Exception.Message)" 'error'
+            }
+            if ($script:_jobPdfUpload.State -in 'Completed','Failed') {
+                $script:_timerPdfUpload.Stop()
+                $script:_timerPdfUpload.Dispose()
+                if ($script:_jobPdfUpload.State -eq 'Failed') {
+                    Write-Console "FOUT: Upload naar Azure Files mislukt." 'error'
+                }
+                Remove-Job $script:_jobPdfUpload -Force
+                $script:btnExportPDF.Enabled = $true
+            }
+        })
+        $script:_timerPdfUpload.Start()
+
+    } catch {
+        Write-Console "FOUT bij exporteren PDF: $_" 'error'
+        $script:btnExportPDF.Enabled = $true
+    } finally {
+        $pd.Dispose()
+        $script:_pdfData = $null
+    }
 }
 
 $btnRefreshInfo = New-Object System.Windows.Forms.Button
