@@ -1523,6 +1523,37 @@ function Update-InfoPanel {
     Display-AllGoodThumb
 }
 
+function Get-HPIASummary {
+    $rapDir = 'C:\HPIAReport'
+    if (-not (Test-Path $rapDir)) { return $null }
+
+    $latest = Get-ChildItem $rapDir -Filter '*.html' -File -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $latest) { return $null }
+
+    try {
+        $html = [System.IO.File]::ReadAllText($latest.FullName)
+        $text = $html -replace '<[^>]+>', ' ' -replace '&[a-z]+;', ' ' -replace '\s+', ' '
+
+        $counts = [ordered]@{}
+        $searches = [ordered]@{
+            'Geinstalleerd'      = 'Installed'
+            'Al up-to-date'      = 'Up.?To.?Date|UpToDate'
+            'Mislukt'            = 'Failed'
+            'Niet geinstalleerd' = 'Not.?Installed|NotInstalled'
+            'Overgeslagen'       = 'Skipped'
+            'Herstart vereist'   = 'Pending'
+        }
+        foreach ($kv in $searches.GetEnumerator()) {
+            if ($text -match "(?i)($($kv.Value))\s*:?\s*(\d+)") {
+                $counts[$kv.Key] = [int]$matches[2]
+            }
+        }
+
+        return @{ File = $latest.Name; Date = $latest.LastWriteTime.ToString('dd-MM-yyyy HH:mm'); Counts = $counts }
+    } catch { return $null }
+}
+
 function Export-RapportPDF {
     $serial = try { (Get-CimInstance Win32_BIOS).SerialNumber.Trim() } catch { 'ONBEKEND' }
     $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
@@ -1555,6 +1586,7 @@ function Export-RapportPDF {
             @{ Label = $rowWifi.Label.Text;   OK = $script:okWifi }
         )
         Bloat    = @($script:hpBloatFound)
+        HPIA     = (Get-HPIASummary)
     }
 
     $pd = New-Object System.Drawing.Printing.PrintDocument
@@ -1626,7 +1658,37 @@ function Export-RapportPDF {
             }
         }
 
+        # HPIA sectie
+        $y += 20
+        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
+        $y += 14
+        $g.DrawString('HP Image Assistant', $fSection, $bBlack, $lm, $y)
         $y += 24
+
+        if ($null -ne $d.HPIA) {
+            $g.DrawString("Rapport: $($d.HPIA.File)   |   $($d.HPIA.Date)", $fSmall, $bGray, $lm, $y)
+            $y += 20
+            if ($d.HPIA.Counts.Count -gt 0) {
+                foreach ($kv in $d.HPIA.Counts.GetEnumerator()) {
+                    $clr = if ($kv.Key -eq 'Mislukt' -and $kv.Value -gt 0)            { $bRed }
+                           elseif ($kv.Key -eq 'Geinstalleerd' -and $kv.Value -gt 0)  { $bGreen }
+                           else                                                         { $bBlack }
+                    $sym = "$([char]0x25CF)"
+                    $g.DrawString("$sym  $($kv.Key): $($kv.Value)", $fCheck, $clr, $lm, $y)
+                    $y += 20
+                }
+            } else {
+                $g.DrawString('Geen samenvatting gevonden in rapport.', $fCheck, $bGray, $lm, $y)
+                $y += 20
+            }
+        } else {
+            $fBig = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
+            $g.DrawString("$([char]0x26A0)  GEEN HPIA-RAPPORT GEVONDEN — HP Image Assistant is mogelijk niet gedraaid.", $fBig, $bRed, $lm, $y)
+            $fBig.Dispose()
+            $y += 26
+        }
+
+        $y += 10
         $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
         $y += 12
         $g.DrawString("Gegenereerd door EOO Windows Installatie Tool v$($d.Version)", $fSmall, $bGray, $lm, $y)
