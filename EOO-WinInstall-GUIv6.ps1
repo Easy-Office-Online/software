@@ -1533,24 +1533,52 @@ function Get-HPIASummary {
 
     try {
         $html = [System.IO.File]::ReadAllText($latest.FullName)
-        $text = $html -replace '<[^>]+>', ' ' -replace '&[a-z]+;', ' ' -replace '\s+', ' '
+
+        $text = $html -replace '<[^>]+>', ' ' -replace '&[^;]+;', ' ' -replace '\s+', ' '
 
         $counts = [ordered]@{}
-        $searches = [ordered]@{
-            'Geinstalleerd'      = 'Installed'
-            'Al up-to-date'      = 'Up.?To.?Date|UpToDate'
-            'Mislukt'            = 'Failed'
-            'Niet geinstalleerd' = 'Not.?Installed|NotInstalled'
-            'Overgeslagen'       = 'Skipped'
-            'Herstart vereist'   = 'Pending'
-        }
-        foreach ($kv in $searches.GetEnumerator()) {
-            if ($text -match "(?i)($($kv.Value))\s*:?\s*(\d+)") {
-                $counts[$kv.Key] = [int]$matches[2]
+        $failCount   = 0
+        $passRestart = 0
+
+        # Type 1: Installatierapport – heeft Pass / Pass * / Fail statuswaarden
+        $passClean   = ([regex]::Matches($html, '(?i)>\s*Pass\s*<')).Count
+        $passRestart = ([regex]::Matches($html, '(?i)>\s*Pass\s+\*\s*<')).Count
+        $failCount   = ([regex]::Matches($html, '(?i)>\s*Fail\s*<')).Count
+
+        if (($passClean + $passRestart + $failCount) -gt 0) {
+            $totalPass = $passClean + $passRestart
+            if ($totalPass   -gt 0) { $counts['Geslaagd']         = $totalPass }
+            if ($passRestart -gt 0) { $counts['Herstart vereist'] = $passRestart }
+            if ($failCount   -gt 0) { $counts['Mislukt']          = $failCount }
+        } else {
+            # Type 2: Analyserapport – Missing Drivers / Out-of-Date structuur
+            if ($text -match '(?i)Missing\s+Drivers\s+(\d+)') {
+                $counts['Ontbrekende drivers'] = [int]$matches[1]
             }
+            if ($text -match '(?i)Missing\s+Drivers\s+\d+\s+Out-of-Date\s+(\d+)') {
+                $counts['Verouderde drivers'] = [int]$matches[1]
+            }
+            # Unieke SP-nummers tellen als aanbevelingen
+            $spList = [regex]::Matches($text, '(?i)\bsp\d{5,6}\b') |
+                      ForEach-Object { $_.Value.ToLower() } | Select-Object -Unique
+            if ($spList.Count -gt 0) { $counts['Aanbevelingen'] = $spList.Count }
         }
 
-        return @{ File = $latest.Name; Date = $latest.LastWriteTime.ToString('dd-MM-yyyy HH:mm'); Counts = $counts }
+        # Body-tekst: sla samenvatting bovenin (System Info / Product Details) over
+        $bodyText = $text
+        foreach ($kw in @('Drivers and Software', 'Installation Status', 'Recommendations')) {
+            $pos = $text.IndexOf($kw, [System.StringComparison]::OrdinalIgnoreCase)
+            if ($pos -ge 0) { $bodyText = $text.Substring($pos).Trim(); break }
+        }
+
+        return @{
+            File     = $latest.Name
+            Date     = $latest.LastWriteTime.ToString('dd-MM-yyyy HH:mm')
+            BodyText = $bodyText
+            Counts   = $counts
+            HasFail  = $failCount -gt 0
+            Restart  = $passRestart -gt 0
+        }
     } catch { return $null }
 }
 
@@ -1667,31 +1695,29 @@ function Export-RapportPDF {
 
         if ($null -ne $d.HPIA) {
             $g.DrawString("Rapport: $($d.HPIA.File)   |   $($d.HPIA.Date)", $fSmall, $bGray, $lm, $y)
-            $y += 20
-            if ($d.HPIA.Counts.Count -gt 0) {
-                foreach ($kv in $d.HPIA.Counts.GetEnumerator()) {
-                    $clr = if ($kv.Key -eq 'Mislukt' -and $kv.Value -gt 0)            { $bRed }
-                           elseif ($kv.Key -eq 'Geinstalleerd' -and $kv.Value -gt 0)  { $bGreen }
-                           else                                                         { $bBlack }
-                    $sym = "$([char]0x25CF)"
-                    $g.DrawString("$sym  $($kv.Key): $($kv.Value)", $fCheck, $clr, $lm, $y)
-                    $y += 20
-                }
+            $y += 16
+            if ($d.HPIA.BodyText) {
+                $footerTopY = [float]$ev.MarginBounds.Bottom - 24
+                $availH     = [Math]::Max(10, $footerTopY - $y - 4)
+                $sf = New-Object System.Drawing.StringFormat
+                $sf.Trimming = [System.Drawing.StringTrimming]::Word
+                $g.DrawString($d.HPIA.BodyText, $fSmall, $bBlack,
+                    [System.Drawing.RectangleF]::new($lm, $y, $pw, $availH), $sf)
+                $sf.Dispose()
             } else {
-                $g.DrawString('Geen samenvatting gevonden in rapport.', $fCheck, $bGray, $lm, $y)
-                $y += 20
+                $g.DrawString('Geen inhoud gevonden in rapport.', $fSmall, $bGray, $lm, $y)
             }
         } else {
             $fBig = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
             $g.DrawString("$([char]0x26A0)  GEEN HPIA-RAPPORT GEVONDEN — HP Image Assistant is mogelijk niet gedraaid.", $fBig, $bRed, $lm, $y)
             $fBig.Dispose()
-            $y += 26
         }
 
-        $y += 10
-        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
-        $y += 12
-        $g.DrawString("Gegenereerd door EOO Windows Installatie Tool v$($d.Version)", $fSmall, $bGray, $lm, $y)
+        # Footer altijd vastgezet onderaan de pagina
+        $fy = [float]$ev.MarginBounds.Bottom - 22
+        $g.DrawLine($penLine, $lm, $fy, ($lm + $pw), $fy)
+        $fy += 10
+        $g.DrawString("Gegenereerd door EOO Windows Installatie Tool v$($d.Version)", $fSmall, $bGray, $lm, $fy)
 
         $penLine.Dispose()
         $bGreen.Dispose(); $bRed.Dispose(); $bTeal.Dispose()
