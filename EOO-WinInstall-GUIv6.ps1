@@ -855,7 +855,7 @@ $script:fullWidthCtrls.Add($btnWifi)
 $btnWifi.Add_Click({
     $script:btnWifi.Enabled = $false
     Write-Console 'WiFi profiel toevoegen...' 'start'
-    $ssid = 'WIFI EOO_Install'
+    $ssid = 'EOO_Install'
     $pw   = 'House-Earth-Wealth-Repair-8'
     $xml  = @"
 <?xml version="1.0"?>
