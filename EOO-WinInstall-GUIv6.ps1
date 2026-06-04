@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'6.0'
+$script:currentVersion = [System.Version]'6.1'
 $script:versionName    = 'Pizza Funghi'
 
 # ── Azure Files configuratie (hier aanpassen) ─────────────────────
@@ -1167,7 +1167,6 @@ $script:btnAzureMount.Add_Click({
     $script:btnAzureMount.Enabled = $false
     Write-Console '─── Azure opslag koppelen ───' 'start'
 
-    # Controleer of X: al bestaat
     if (Test-Path 'X:\') {
         $netInfo = (& net use X: 2>&1) -join ' '
         Write-Console '[OK] X:\ is al gekoppeld.' 'ok'
@@ -1182,54 +1181,27 @@ $script:btnAzureMount.Add_Click({
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
 
-    $script:jobAzureMount = Start-Job -ScriptBlock {
-        param($sa, $sn, $k)
-        $out      = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1
-        $exitCode = $LASTEXITCODE
-        Write-Output "EXITCODE:$exitCode"
-        foreach ($line in $out) {
-            if ($line -and $line.ToString().Trim()) {
-                Write-Output "NETUSE:$($line.ToString().Trim())"
-            }
-        }
-        if ($exitCode -eq 0) {
-            Write-Output 'STATUS:OK'
-        } else {
-            Write-Output 'STATUS:FAIL'
-        }
-    } -ArgumentList $script:afStorageAccount, $script:afShareName, $script:afKey
+    $sa = $script:afStorageAccount
+    $sn = $script:afShareName
+    $k  = $script:afKey
+    $out      = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" "$k" /persistent:no 2>&1
+    $exitCode = $LASTEXITCODE
 
-    $script:timerAzureMount = New-Object System.Windows.Forms.Timer
-    $script:timerAzureMount.Interval = 500
-    $script:timerAzureMount.Add_Tick({
-        foreach ($line in ($script:jobAzureMount.ChildJobs[0].Output.ReadAll())) {
-            if     ($line -match '^EXITCODE:(.+)')  {
-                $ec = $matches[1]
-                Write-Console "  net use exit code: $ec" $(if ($ec -eq '0') { 'info' } else { 'error' })
-            }
-            elseif ($line -match '^NETUSE:(.+)')    { Write-Console "  net use: $($matches[1])" 'info' }
-            elseif ($line -eq 'STATUS:OK')          {
-                Write-Console '[OK] Azure opslag gekoppeld op X:\' 'ok'
-                Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
-            }
-            elseif ($line -eq 'STATUS:FAIL')        {
-                Write-Console 'FOUT: koppelen mislukt (zie net use output hierboven).' 'error'
-                Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
-            }
-        }
-        if ($script:jobAzureMount.State -in 'Completed','Failed') {
-            $script:timerAzureMount.Stop()
-            $script:timerAzureMount.Dispose()
-            if ($script:jobAzureMount.State -eq 'Failed') {
-                $reason = $script:jobAzureMount.ChildJobs[0].JobStateInfo.Reason.Message
-                Write-Console "FOUT (job gestopt): $reason" 'error'
-            }
-            Remove-Job $script:jobAzureMount -Force
-            $script:btnAzureMount.Enabled = $true
-            Write-Console '─────────────────────────────' 'info'
-        }
-    })
-    $script:timerAzureMount.Start()
+    Write-Console "  net use exit code: $exitCode" $(if ($exitCode -eq 0) { 'info' } else { 'error' })
+    foreach ($line in $out) {
+        $lineStr = $line.ToString().Trim()
+        if ($lineStr) { Write-Console "  net use: $lineStr" 'info' }
+    }
+
+    if ($exitCode -eq 0) {
+        Write-Console '[OK] Azure opslag gekoppeld op X:\' 'ok'
+        Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+    } else {
+        Write-Console "FOUT: koppelen mislukt (exit code: $exitCode)." 'error'
+        Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+    }
+    $script:btnAzureMount.Enabled = $true
+    Write-Console '─────────────────────────────' 'info'
 })
 
 # ── Sectie: Rapport ──────────────────────────────────────────────
