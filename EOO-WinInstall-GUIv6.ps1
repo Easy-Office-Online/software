@@ -133,11 +133,59 @@ try {
 Read-Host "Druk op Enter om te sluiten"
 '@
 
+$script_MapDrive = @'
+# Bestaande koppelingen naar dezelfde server (evt. andere gebruikersnaam/drive-letter) eerst
+# opruimen, anders weigert Windows de nieuwe X:-koppeling (systeemfout 1219).
+$serverName = '##STORAGEACCOUNT##.file.core.windows.net'
+foreach ($line in (& net use 2>&1)) {
+    if ($line -match [regex]::Escape($serverName)) {
+        $driveLetter = ($line -split '\s+' | Where-Object { $_ -match '^[A-Za-z]:$' } | Select-Object -First 1)
+        if ($driveLetter -and $driveLetter -ne 'X:') {
+            & net use $driveLetter /delete /y 2>&1 | Out-Null
+        }
+    }
+}
+
+$out       = & net use X: "\\##STORAGEACCOUNT##.file.core.windows.net\##SHARENAME##" /user:"Azure\##STORAGEACCOUNT##" "##KEY##" /persistent:no 2>&1
+$exitCode  = $LASTEXITCODE
+$resultTxt = "$exitCode|" + ($out -join "`n")
+Set-Content -Path "##RESULTFILE##" -Value $resultTxt -Encoding UTF8
+'@
+
 function Write-TempScript {
     param([string]$Content, [string]$Filename)
     $path = Join-Path $env:TEMP $Filename
     [System.IO.File]::WriteAllText($path, ($Content -replace "`r`n","`n" -replace "`n","`r`n"))
     return $path
+}
+
+function Invoke-AsStandardUser {
+    <#
+        Voert een script uit binnen de interactieve (niet-verhoogde) sessie van de huidige
+        gebruiker via een tijdelijke geplande taak. Nodig omdat deze GUI zelf verhoogd (Administrator)
+        draait: netwerkschijven die vanuit een verhoogd proces gekoppeld worden zijn onzichtbaar in
+        Verkenner (aparte logon-sessie per integriteitsniveau). Door de taak met RunLevel 'Limited'
+        te starten, draait het net use-commando in dezelfde sessie/integriteit als explorer.exe.
+    #>
+    param([string]$ScriptPath, [int]$TimeoutSeconds = 20)
+
+    $taskName = "EOO_Task_$([guid]::NewGuid().ToString('N'))"
+    try {
+        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ScriptPath`""
+        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force | Out-Null
+        Start-ScheduledTask -TaskName $taskName
+
+        $elapsed = 0
+        while ($elapsed -lt $TimeoutSeconds) {
+            Start-Sleep -Milliseconds 400
+            $elapsed += 0.4
+            $state = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
+            if ($state -eq 'Ready') { break }
+        }
+    } finally {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
 }
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -1166,40 +1214,46 @@ $script:fullWidthCtrls.Add($script:btnAzureMount)
 $script:btnAzureMount.Add_Click({
     $script:btnAzureMount.Enabled = $false
     Write-Console '─── Azure opslag koppelen ───' 'start'
-
-    if (Test-Path 'X:\') {
-        $netInfo = (& net use X: 2>&1) -join ' '
-        Write-Console '[OK] X:\ is al gekoppeld.' 'ok'
-        Write-Console "     $netInfo" 'info'
-        Write-Console '     Koppeling is actief voor deze sessie (verdwijnt na herstart).' 'info'
-        $script:btnAzureMount.Enabled = $true
-        return
-    }
-
-    Write-Console 'X:\ niet gevonden, koppelen...' 'info'
     Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
+    Write-Console '  Koppeling wordt uitgevoerd in de sessie van de ingelogde gebruiker (zichtbaar in Verkenner)...' 'info'
 
-    $sa = $script:afStorageAccount
-    $sn = $script:afShareName
-    $k  = $script:afKey
-    $out      = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" "$k" /persistent:no 2>&1
-    $exitCode = $LASTEXITCODE
+    $resultFile = Join-Path $env:TEMP "EOO_MapDrive_Result_$([guid]::NewGuid().ToString('N')).txt"
+    $content    = $script_MapDrive.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey).Replace('##RESULTFILE##', $resultFile)
+    $scriptPath = Write-TempScript -Content $content -Filename "EOO_MapDrive_$([guid]::NewGuid().ToString('N')).ps1"
 
-    Write-Console "  net use exit code: $exitCode" $(if ($exitCode -eq 0) { 'info' } else { 'error' })
-    foreach ($line in $out) {
-        $lineStr = $line.ToString().Trim()
-        if ($lineStr) { Write-Console "  net use: $lineStr" 'info' }
+    try {
+        Invoke-AsStandardUser -ScriptPath $scriptPath
+
+        if (-not (Test-Path $resultFile)) {
+            Write-Console 'FOUT: kon resultaat van koppeling niet ophalen (geplande taak reageerde niet op tijd).' 'error'
+        } else {
+            $resultRaw = Get-Content -Path $resultFile -Raw
+            $parts     = $resultRaw -split '\|', 2
+            $exitCode  = [int]$parts[0]
+            $outText   = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+
+            Write-Console "  net use exit code: $exitCode" $(if ($exitCode -eq 0) { 'info' } else { 'error' })
+            foreach ($line in ($outText -split "`n")) {
+                $lineStr = $line.Trim()
+                if ($lineStr) { Write-Console "  net use: $lineStr" 'info' }
+            }
+
+            if ($exitCode -eq 0) {
+                Write-Console '[OK] Azure opslag gekoppeld op X:\ — zichtbaar in Verkenner.' 'ok'
+                Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+            } elseif ($outText -match 'reeds toegewezen|already.*use|Systeemfout 85') {
+                Write-Console '[OK] X:\ was al gekoppeld in de gebruikerssessie.' 'ok'
+            } else {
+                Write-Console "FOUT: koppelen mislukt (exit code: $exitCode)." 'error'
+                Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+            }
+        }
+    } finally {
+        Remove-Item -Path $resultFile, $scriptPath -ErrorAction SilentlyContinue
     }
 
-    if ($exitCode -eq 0) {
-        Write-Console '[OK] Azure opslag gekoppeld op X:\' 'ok'
-        Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
-    } else {
-        Write-Console "FOUT: koppelen mislukt (exit code: $exitCode)." 'error'
-        Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
-    }
     $script:btnAzureMount.Enabled = $true
     Write-Console '─────────────────────────────' 'info'
 })
