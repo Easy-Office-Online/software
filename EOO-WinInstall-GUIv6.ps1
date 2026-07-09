@@ -1190,65 +1190,18 @@ $script:btnAzureMount.Add_Click({
     $script:jobMapDrive = Start-Job -ScriptBlock {
         param($sa, $sn, $k)
 
-        $mapScriptText = @"
-try {
-    Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { `$_.RemotePath -like '\\$sa.file.core.windows.net\*' } | ForEach-Object {
-        Remove-SmbMapping -LocalPath `$_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
-    }
-    New-SmbMapping -LocalPath 'X:' -RemotePath '\\$sa.file.core.windows.net\$sn' -UserName 'Azure\$sa' -Password '$k' -Persistent `$false -ErrorAction Stop | Out-Null
-    Set-Content -Path '##RESULTFILE##' -Value '0|OK' -Encoding UTF8
-} catch {
-    Set-Content -Path '##RESULTFILE##' -Value "1|`$(`$_.Exception.Message)" -Encoding UTF8
-}
-"@
-
-        $explorerRunning = [bool](Get-Process -Name explorer -ErrorAction SilentlyContinue)
-
-        if (-not $explorerRunning) {
-            # Geen Verkenner-sessie (bijv. OOBE) - rechtstreeks koppelen heeft dan geen zichtbaarheidsprobleem.
-            Write-Output 'Geen Verkenner-sessie gedetecteerd (waarschijnlijk OOBE) - rechtstreeks koppelen...'
-            try {
-                Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
-                    Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
-                }
-                New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
-                Write-Output 'SIGNAL:0|OK'
-            } catch {
-                Write-Output "SIGNAL:1|$($_.Exception.Message)"
-            }
-            return
-        }
-
-        Write-Output 'Koppeling wordt uitgevoerd in de sessie van de ingelogde gebruiker (zichtbaar in Verkenner)...'
-        $resultFile = Join-Path $env:TEMP "EOO_MapDrive_Result_$([guid]::NewGuid().ToString('N')).txt"
-        $scriptPath = Join-Path $env:TEMP "EOO_MapDrive_$([guid]::NewGuid().ToString('N')).ps1"
-        [System.IO.File]::WriteAllText($scriptPath, $mapScriptText.Replace('##RESULTFILE##', $resultFile))
-
-        $taskName = "EOO_Task_$([guid]::NewGuid().ToString('N'))"
+        # Koppelen en Verkenner openen gebeuren in hetzelfde proces/dezelfde sessie, zodat
+        # het nieuwe Verkenner-venster de zojuist gelegde koppeling altijd kan zien.
         try {
-            $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
-            $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-            Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force | Out-Null
-            Start-ScheduledTask -TaskName $taskName
-
-            $elapsed = 0
-            while ($elapsed -lt 20) {
-                Start-Sleep -Milliseconds 400
-                $elapsed += 0.4
-                $state = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
-                if ($state -eq 'Ready') { break }
+            Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
+                Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
             }
-        } finally {
-            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+            New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
+            Start-Process explorer.exe -ArgumentList 'X:\' -ErrorAction SilentlyContinue
+            Write-Output 'SIGNAL:0|OK'
+        } catch {
+            Write-Output "SIGNAL:1|$($_.Exception.Message)"
         }
-
-        if (Test-Path $resultFile) {
-            Write-Output "SIGNAL:$(Get-Content -Path $resultFile -Raw)"
-            Remove-Item $resultFile -ErrorAction SilentlyContinue
-        } else {
-            Write-Output 'SIGNAL:1|Geen resultaat ontvangen (geplande taak reageerde niet op tijd).'
-        }
-        Remove-Item $scriptPath -ErrorAction SilentlyContinue
     } -ArgumentList $sa, $sn, $k
 
     $script:timerMapDrive = New-Object System.Windows.Forms.Timer
@@ -1257,7 +1210,7 @@ try {
         foreach ($line in ($script:jobMapDrive.ChildJobs[0].Output.ReadAll())) {
             if ($line -match '^SIGNAL:(\d+)\|(.*)$') {
                 if ($matches[1] -eq '0') {
-                    Write-Console '[OK] Azure opslag gekoppeld op X:\' 'ok'
+                    Write-Console '[OK] Azure opslag gekoppeld op X:\ - Verkenner wordt geopend...' 'ok'
                     Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
                 } else {
                     Write-Console "FOUT: koppelen mislukt - $($matches[2])" 'error'
