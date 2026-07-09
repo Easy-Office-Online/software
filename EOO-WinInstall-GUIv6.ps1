@@ -86,8 +86,14 @@ try {
     Write-Host "CSV aangemaakt: $file"
     Write-Host "Uploaden naar Azure Files..."
     if (-not (Test-Path 'X:\')) {
-        net use X: "\\$storageAccount.file.core.windows.net\$shareName" /user:"Azure\$storageAccount" $key /persistent:no | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Kan Azure Files share niet bereiken. Controleer poort 445." }
+        Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$storageAccount.file.core.windows.net\*" } | ForEach-Object {
+            Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+        }
+        try {
+            New-SmbMapping -LocalPath 'X:' -RemotePath "\\$storageAccount.file.core.windows.net\$shareName" -UserName "Azure\$storageAccount" -Password $key -Persistent $false -ErrorAction Stop | Out-Null
+        } catch {
+            throw "Kan Azure Files share niet bereiken. Controleer poort 445. ($_)"
+        }
     }
     if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
     Copy-Item -Path $file -Destination "X:\HWID\$env:COMPUTERNAME.csv" -Force
@@ -121,8 +127,14 @@ try {
     Write-Host "Regel toegevoegd aan: $file"
     Write-Host "Uploaden naar Azure Files..."
     if (-not (Test-Path 'X:\')) {
-        net use X: "\\$storageAccount.file.core.windows.net\$shareName" /user:"Azure\$storageAccount" $key /persistent:no | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Kan Azure Files share niet bereiken. Controleer poort 445." }
+        Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$storageAccount.file.core.windows.net\*" } | ForEach-Object {
+            Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+        }
+        try {
+            New-SmbMapping -LocalPath 'X:' -RemotePath "\\$storageAccount.file.core.windows.net\$shareName" -UserName "Azure\$storageAccount" -Password $key -Persistent $false -ErrorAction Stop | Out-Null
+        } catch {
+            throw "Kan Azure Files share niet bereiken. Controleer poort 445. ($_)"
+        }
     }
     if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
     Copy-Item -Path $file -Destination "X:\HWID\$BatchName.csv" -Force
@@ -133,59 +145,11 @@ try {
 Read-Host "Druk op Enter om te sluiten"
 '@
 
-$script_MapDrive = @'
-# Bestaande koppelingen naar dezelfde server (evt. andere gebruikersnaam/drive-letter) eerst
-# opruimen, anders weigert Windows de nieuwe X:-koppeling (systeemfout 1219).
-$serverName = '##STORAGEACCOUNT##.file.core.windows.net'
-foreach ($line in (& net use 2>&1)) {
-    if ($line -match [regex]::Escape($serverName)) {
-        $driveLetter = ($line -split '\s+' | Where-Object { $_ -match '^[A-Za-z]:$' } | Select-Object -First 1)
-        if ($driveLetter -and $driveLetter -ne 'X:') {
-            & net use $driveLetter /delete /y 2>&1 | Out-Null
-        }
-    }
-}
-
-$out       = & net use X: "\\##STORAGEACCOUNT##.file.core.windows.net\##SHARENAME##" /user:"Azure\##STORAGEACCOUNT##" "##KEY##" /persistent:no 2>&1
-$exitCode  = $LASTEXITCODE
-$resultTxt = "$exitCode|" + ($out -join "`n")
-Set-Content -Path "##RESULTFILE##" -Value $resultTxt -Encoding UTF8
-'@
-
 function Write-TempScript {
     param([string]$Content, [string]$Filename)
     $path = Join-Path $env:TEMP $Filename
     [System.IO.File]::WriteAllText($path, ($Content -replace "`r`n","`n" -replace "`n","`r`n"))
     return $path
-}
-
-function Invoke-AsStandardUser {
-    <#
-        Voert een script uit binnen de interactieve (niet-verhoogde) sessie van de huidige
-        gebruiker via een tijdelijke geplande taak. Nodig omdat deze GUI zelf verhoogd (Administrator)
-        draait: netwerkschijven die vanuit een verhoogd proces gekoppeld worden zijn onzichtbaar in
-        Verkenner (aparte logon-sessie per integriteitsniveau). Door de taak met RunLevel 'Limited'
-        te starten, draait het net use-commando in dezelfde sessie/integriteit als explorer.exe.
-    #>
-    param([string]$ScriptPath, [int]$TimeoutSeconds = 20)
-
-    $taskName = "EOO_Task_$([guid]::NewGuid().ToString('N'))"
-    try {
-        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ScriptPath`""
-        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force | Out-Null
-        Start-ScheduledTask -TaskName $taskName
-
-        $elapsed = 0
-        while ($elapsed -lt $TimeoutSeconds) {
-            Start-Sleep -Milliseconds 400
-            $elapsed += 0.4
-            $state = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
-            if ($state -eq 'Ready') { break }
-        }
-    } finally {
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-    }
 }
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -1217,45 +1181,106 @@ $script:btnAzureMount.Add_Click({
     Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
-    Write-Console '  Koppeling wordt uitgevoerd in de sessie van de ingelogde gebruiker (zichtbaar in Verkenner)...' 'info'
 
-    $resultFile = Join-Path $env:TEMP "EOO_MapDrive_Result_$([guid]::NewGuid().ToString('N')).txt"
-    $content    = $script_MapDrive.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey).Replace('##RESULTFILE##', $resultFile)
-    $scriptPath = Write-TempScript -Content $content -Filename "EOO_MapDrive_$([guid]::NewGuid().ToString('N')).ps1"
+    $sa = $script:afStorageAccount
+    $sn = $script:afShareName
+    $k  = $script:afKey
 
-    try {
-        Invoke-AsStandardUser -ScriptPath $scriptPath
+    # Draait op de achtergrond (zoals de andere knoppen) zodat de GUI niet bevriest.
+    $script:jobMapDrive = Start-Job -ScriptBlock {
+        param($sa, $sn, $k)
 
-        if (-not (Test-Path $resultFile)) {
-            Write-Console 'FOUT: kon resultaat van koppeling niet ophalen (geplande taak reageerde niet op tijd).' 'error'
-        } else {
-            $resultRaw = Get-Content -Path $resultFile -Raw
-            $parts     = $resultRaw -split '\|', 2
-            $exitCode  = [int]$parts[0]
-            $outText   = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+        $mapScriptText = @"
+try {
+    Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { `$_.RemotePath -like '\\$sa.file.core.windows.net\*' } | ForEach-Object {
+        Remove-SmbMapping -LocalPath `$_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+    }
+    New-SmbMapping -LocalPath 'X:' -RemotePath '\\$sa.file.core.windows.net\$sn' -UserName 'Azure\$sa' -Password '$k' -Persistent `$false -ErrorAction Stop | Out-Null
+    Set-Content -Path '##RESULTFILE##' -Value '0|OK' -Encoding UTF8
+} catch {
+    Set-Content -Path '##RESULTFILE##' -Value "1|`$(`$_.Exception.Message)" -Encoding UTF8
+}
+"@
 
-            Write-Console "  net use exit code: $exitCode" $(if ($exitCode -eq 0) { 'info' } else { 'error' })
-            foreach ($line in ($outText -split "`n")) {
-                $lineStr = $line.Trim()
-                if ($lineStr) { Write-Console "  net use: $lineStr" 'info' }
+        $explorerRunning = [bool](Get-Process -Name explorer -ErrorAction SilentlyContinue)
+
+        if (-not $explorerRunning) {
+            # Geen Verkenner-sessie (bijv. OOBE) - rechtstreeks koppelen heeft dan geen zichtbaarheidsprobleem.
+            Write-Output 'Geen Verkenner-sessie gedetecteerd (waarschijnlijk OOBE) - rechtstreeks koppelen...'
+            try {
+                Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
+                    Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+                }
+                New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
+                Write-Output 'SIGNAL:0|OK'
+            } catch {
+                Write-Output "SIGNAL:1|$($_.Exception.Message)"
             }
+            return
+        }
 
-            if ($exitCode -eq 0) {
-                Write-Console '[OK] Azure opslag gekoppeld op X:\ — zichtbaar in Verkenner.' 'ok'
-                Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
-            } elseif ($outText -match 'reeds toegewezen|already.*use|Systeemfout 85') {
-                Write-Console '[OK] X:\ was al gekoppeld in de gebruikerssessie.' 'ok'
+        Write-Output 'Koppeling wordt uitgevoerd in de sessie van de ingelogde gebruiker (zichtbaar in Verkenner)...'
+        $resultFile = Join-Path $env:TEMP "EOO_MapDrive_Result_$([guid]::NewGuid().ToString('N')).txt"
+        $scriptPath = Join-Path $env:TEMP "EOO_MapDrive_$([guid]::NewGuid().ToString('N')).ps1"
+        [System.IO.File]::WriteAllText($scriptPath, $mapScriptText.Replace('##RESULTFILE##', $resultFile))
+
+        $taskName = "EOO_Task_$([guid]::NewGuid().ToString('N'))"
+        try {
+            $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
+            $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+            Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force | Out-Null
+            Start-ScheduledTask -TaskName $taskName
+
+            $elapsed = 0
+            while ($elapsed -lt 20) {
+                Start-Sleep -Milliseconds 400
+                $elapsed += 0.4
+                $state = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
+                if ($state -eq 'Ready') { break }
+            }
+        } finally {
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        }
+
+        if (Test-Path $resultFile) {
+            Write-Output "SIGNAL:$(Get-Content -Path $resultFile -Raw)"
+            Remove-Item $resultFile -ErrorAction SilentlyContinue
+        } else {
+            Write-Output 'SIGNAL:1|Geen resultaat ontvangen (geplande taak reageerde niet op tijd).'
+        }
+        Remove-Item $scriptPath -ErrorAction SilentlyContinue
+    } -ArgumentList $sa, $sn, $k
+
+    $script:timerMapDrive = New-Object System.Windows.Forms.Timer
+    $script:timerMapDrive.Interval = 500
+    $script:timerMapDrive.Add_Tick({
+        foreach ($line in ($script:jobMapDrive.ChildJobs[0].Output.ReadAll())) {
+            if ($line -match '^SIGNAL:(\d+)\|(.*)$') {
+                if ($matches[1] -eq '0') {
+                    Write-Console '[OK] Azure opslag gekoppeld op X:\' 'ok'
+                    Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+                } else {
+                    Write-Console "FOUT: koppelen mislukt - $($matches[2])" 'error'
+                    Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+                }
             } else {
-                Write-Console "FOUT: koppelen mislukt (exit code: $exitCode)." 'error'
-                Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+                Write-Console "  $line" 'info'
             }
         }
-    } finally {
-        Remove-Item -Path $resultFile, $scriptPath -ErrorAction SilentlyContinue
-    }
-
-    $script:btnAzureMount.Enabled = $true
-    Write-Console '─────────────────────────────' 'info'
+        foreach ($err in ($script:jobMapDrive.ChildJobs[0].Error.ReadAll())) {
+            Write-Console "FOUT: $($err.Exception.Message)" 'error'
+        }
+        if ($script:jobMapDrive.State -in 'Completed','Failed') {
+            $script:timerMapDrive.Stop(); $script:timerMapDrive.Dispose()
+            if ($script:jobMapDrive.State -eq 'Failed') {
+                Write-Console "FOUT: $($script:jobMapDrive.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
+            }
+            Remove-Job $script:jobMapDrive -Force
+            $script:btnAzureMount.Enabled = $true
+            Write-Console '─────────────────────────────' 'info'
+        }
+    })
+    $script:timerMapDrive.Start()
 })
 
 # ── Sectie: Rapport ──────────────────────────────────────────────
@@ -1766,8 +1791,14 @@ function Export-RapportPDF {
             if (-not (Test-Path $localPath)) { throw 'PDF niet beschikbaar na 15 seconden.' }
             $fn = [System.IO.Path]::GetFileName($localPath)
             if (-not (Test-Path 'X:\')) {
-                $out = & net use X: "\\$sa.file.core.windows.net\$sn" /user:"Azure\$sa" $k /persistent:no 2>&1
-                if ($LASTEXITCODE -ne 0) { throw "Azure Files koppelen mislukt: $($out -join ' ')" }
+                Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
+                    Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+                }
+                try {
+                    New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
+                } catch {
+                    throw "Azure Files koppelen mislukt: $_"
+                }
             }
             $rapDir = 'X:\Rapporten'
             if (-not (Test-Path $rapDir)) { New-Item -ItemType Directory -Path $rapDir | Out-Null }
