@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'6.1'
+$script:currentVersion = [System.Version]'6.2'
 $script:versionName    = 'Pizza Funghi'
 
 # ── Azure Files configuratie (hier aanpassen) ─────────────────────
@@ -1186,54 +1186,76 @@ $script:btnAzureMount.Add_Click({
     $sn = $script:afShareName
     $k  = $script:afKey
 
-    # Draait op de achtergrond (zoals de andere knoppen) zodat de GUI niet bevriest.
-    $script:jobMapDrive = Start-Job -ScriptBlock {
-        param($sa, $sn, $k)
+    # Deze GUI draait elevated (Administrator-token, zie UAC-herstart bovenaan het
+    # script). Een schijfkoppeling die vanuit dit elevated proces (of een Start-Job
+    # daaruit) wordt gelegd, leeft in de elevated logon-sessie. Windows scheidt
+    # gekoppelde netwerkschijven strikt per token/logon-sessie, dus de niet-elevated
+    # shell (Verkenner) ziet die koppeling niet - dit speelt met name tijdens de OOBE,
+    # waar defaultuser0 een niet-elevated Verkenner-sessie draait terwijl deze tool
+    # elevated is. Vroeger "leek" dit soms te werken; recente Windows-builds scheiden
+    # dit strikter, waardoor X:\ leeg/onbereikbaar oogt in Verkenner.
+    # Oplossing: koppelen + Verkenner openen gebeurt via een taakplanner-taak met
+    # RunLevel 'Limited', zodat het altijd in de niet-elevated sessie van de
+    # ingelogde gebruiker (ook defaultuser0) plaatsvindt - dezelfde sessie als de
+    # zichtbare Verkenner-shell.
+    $guid       = [guid]::NewGuid().ToString('N')
+    $signalFile = Join-Path $env:TEMP "EOO_AzureMount_$guid.signal"
+    $mapScript = @"
+try {
+    Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { `$_.RemotePath -like '\\$sa.file.core.windows.net\*' } | ForEach-Object {
+        Remove-SmbMapping -LocalPath `$_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+    }
+    New-SmbMapping -LocalPath 'X:' -RemotePath '\\$sa.file.core.windows.net\$sn' -UserName 'Azure\$sa' -Password '$k' -Persistent `$false -ErrorAction Stop | Out-Null
+    Start-Process explorer.exe -ArgumentList 'X:\' -ErrorAction SilentlyContinue
+    Set-Content -Path '$signalFile' -Value 'SIGNAL:0|OK' -Encoding UTF8
+} catch {
+    Set-Content -Path '$signalFile' -Value "SIGNAL:1|`$(`$_.Exception.Message)" -Encoding UTF8
+}
+"@
+    $scriptPath = Write-TempScript -Content $mapScript -Filename "EOO_AzureMount_$guid.ps1"
+    $taskName   = "EOO_AzureMount_$($guid.Substring(0,8))"
 
-        # Koppelen en Verkenner openen gebeuren in hetzelfde proces/dezelfde sessie, zodat
-        # het nieuwe Verkenner-venster de zojuist gelegde koppeling altijd kan zien.
-        try {
-            Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
-                Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
-            }
-            New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
-            Start-Process explorer.exe -ArgumentList 'X:\' -ErrorAction SilentlyContinue
-            Write-Output 'SIGNAL:0|OK'
-        } catch {
-            Write-Output "SIGNAL:1|$($_.Exception.Message)"
-        }
-    } -ArgumentList $sa, $sn, $k
+    try {
+        Remove-Item $signalFile -Force -ErrorAction SilentlyContinue
+        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
+        Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
 
-    $script:timerMapDrive = New-Object System.Windows.Forms.Timer
-    $script:timerMapDrive.Interval = 500
-    $script:timerMapDrive.Add_Tick({
-        foreach ($line in ($script:jobMapDrive.ChildJobs[0].Output.ReadAll())) {
-            if ($line -match '^SIGNAL:(\d+)\|(.*)$') {
-                if ($matches[1] -eq '0') {
-                    Write-Console '[OK] Azure opslag gekoppeld op X:\ - Verkenner wordt geopend...' 'ok'
-                    Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+        $script:mapElapsed = 0
+        $script:timerMapDrive = New-Object System.Windows.Forms.Timer
+        $script:timerMapDrive.Interval = 500
+        $script:timerMapDrive.Add_Tick({
+            $script:mapElapsed += 500
+            $timedOut = $script:mapElapsed -gt 20000
+            if ((Test-Path $signalFile) -or $timedOut) {
+                $script:timerMapDrive.Stop(); $script:timerMapDrive.Dispose()
+                if (Test-Path $signalFile) {
+                    $result = (Get-Content $signalFile -Raw).Trim()
+                    if ($result -match '^SIGNAL:0') {
+                        Write-Console '[OK] Azure opslag gekoppeld op X:\ - Verkenner wordt geopend...' 'ok'
+                        Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+                    } else {
+                        Write-Console "FOUT: koppelen mislukt - $result" 'error'
+                        Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+                    }
                 } else {
-                    Write-Console "FOUT: koppelen mislukt - $($matches[2])" 'error'
-                    Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
+                    Write-Console 'FOUT: koppelen mislukt - geen resultaat ontvangen (time-out).' 'error'
                 }
-            } else {
-                Write-Console "  $line" 'info'
+                Remove-Item $signalFile -Force -ErrorAction SilentlyContinue
+                Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
+                Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+                $script:btnAzureMount.Enabled = $true
+                Write-Console '─────────────────────────────' 'info'
             }
-        }
-        foreach ($err in ($script:jobMapDrive.ChildJobs[0].Error.ReadAll())) {
-            Write-Console "FOUT: $($err.Exception.Message)" 'error'
-        }
-        if ($script:jobMapDrive.State -in 'Completed','Failed') {
-            $script:timerMapDrive.Stop(); $script:timerMapDrive.Dispose()
-            if ($script:jobMapDrive.State -eq 'Failed') {
-                Write-Console "FOUT: $($script:jobMapDrive.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
-            }
-            Remove-Job $script:jobMapDrive -Force
-            $script:btnAzureMount.Enabled = $true
-            Write-Console '─────────────────────────────' 'info'
-        }
-    })
-    $script:timerMapDrive.Start()
+        })
+        $script:timerMapDrive.Start()
+    } catch {
+        Write-Console "FOUT: kon koppel-taak niet starten - $_" 'error'
+        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        $script:btnAzureMount.Enabled = $true
+    }
 })
 
 # ── Sectie: Rapport ──────────────────────────────────────────────
