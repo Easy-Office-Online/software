@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'6.4'
+$script:currentVersion = [System.Version]'6.5'
 $script:versionName    = 'Pizza Funghi'
 
 # ── Azure Files configuratie (hier aanpassen) ─────────────────────
@@ -155,6 +155,102 @@ function Write-TempScript {
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 # EnableVisualStyles weggelaten voor Windows 95 opmaak
+
+# Helper om een proces te starten met het token van een reeds draaiend proces van de
+# ingelogde gebruiker (bv. explorer.exe), ongeacht of dit script zelf als SYSTEM draait.
+# Nodig voor de Azure-schijfkoppeling tijdens de OOBE (Shift+F10 -> powershell draait
+# als SYSTEM, terwijl Verkenner draait als defaultuser0). Vereist SeAssignPrimaryTokenPrivilege,
+# wat SYSTEM standaard heeft maar een gewone Administrator-token niet.
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class EOOTokenHelper
+{
+    private const uint PROCESS_QUERY_INFORMATION = 0x0400;
+    private const uint TOKEN_DUPLICATE = 0x0002;
+    private const uint MAXIMUM_ALLOWED = 0x02000000;
+    private const int SecurityImpersonation = 2;
+    private const int TokenPrimary = 1;
+    private const uint CREATE_NO_WINDOW = 0x08000000;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct STARTUPINFO
+    {
+        public int cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize;
+        public int dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2;
+        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_INFORMATION
+    {
+        public IntPtr hProcess, hThread;
+        public int dwProcessId, dwThreadId;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool DuplicateTokenEx(IntPtr hExistingToken, uint dwDesiredAccess, IntPtr lpTokenAttributes,
+        int ImpersonationLevel, int TokenType, out IntPtr phNewToken);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, string lpCommandLine,
+        IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags,
+        IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    public static string StartAsUserOf(int sourceProcessId, string commandLine)
+    {
+        IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, false, sourceProcessId);
+        if (hProcess == IntPtr.Zero) return "OpenProcess mislukt: " + Marshal.GetLastWin32Error();
+
+        IntPtr hToken;
+        if (!OpenProcessToken(hProcess, TOKEN_DUPLICATE, out hToken))
+        {
+            CloseHandle(hProcess);
+            return "OpenProcessToken mislukt: " + Marshal.GetLastWin32Error();
+        }
+        CloseHandle(hProcess);
+
+        IntPtr hDupToken;
+        if (!DuplicateTokenEx(hToken, MAXIMUM_ALLOWED, IntPtr.Zero, SecurityImpersonation, TokenPrimary, out hDupToken))
+        {
+            CloseHandle(hToken);
+            return "DuplicateTokenEx mislukt: " + Marshal.GetLastWin32Error();
+        }
+        CloseHandle(hToken);
+
+        STARTUPINFO si = new STARTUPINFO();
+        si.cb = Marshal.SizeOf(si);
+        si.lpDesktop = "winsta0\\default";
+
+        PROCESS_INFORMATION pi;
+        bool ok = CreateProcessAsUser(hDupToken, null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
+            CREATE_NO_WINDOW, IntPtr.Zero, null, ref si, out pi);
+        int err = Marshal.GetLastWin32Error();
+        CloseHandle(hDupToken);
+
+        if (!ok) return "CreateProcessAsUser mislukt: " + err;
+
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return null;
+    }
+}
+"@
 
 $clrBg        = [System.Drawing.Color]::FromArgb(192, 192, 192)   # Win95 grijs
 $clrAccent    = [System.Drawing.Color]::FromArgb(0, 0, 128)        # Win95 navy (titelbalk)
@@ -1190,25 +1286,16 @@ $script:btnAzureMount.Add_Click({
     # shell: normaal draait hij elevated (Administrator-token via de UAC-herstart
     # bovenaan dit script), en tijdens de OOBE (Shift+F10 -> powershell -> tool
     # starten) draait hij zelfs als NT AUTHORITY\SYSTEM, terwijl Verkenner draait
-    # als defaultuser0. Windows deelt gekoppelde netwerkschijven niet tussen
-    # accounts/sessies, dus een koppeling gelegd als Administrator of SYSTEM is
-    # onzichtbaar voor de defaultuser0-Verkenner die opent. Daarom zoeken we op wie
-    # de actieve explorer.exe (de zichtbare shell) draait, en leggen we de koppeling
-    # + het openen van Verkenner via een taakplanner-taak die als DIE gebruiker
-    # draait (RunLevel Limited = niet-elevated), zodat het altijd in dezelfde
-    # sessie gebeurt als de Verkenner die de gebruiker ziet.
-    $explorerProc = Get-Process -Name explorer -IncludeUserName -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $explorerProc -or -not $explorerProc.UserName) {
-        Write-Console 'FOUT: kon de actieve Verkenner-sessie niet vinden.' 'error'
-        $script:btnAzureMount.Enabled = $true
-        return
-    }
-    $targetUser = $explorerProc.UserName
-    Write-Console "  Doelgebruiker   : $targetUser" 'info'
-
-    # $script:-scope is vereist voor alles wat de Add_Tick-timer hieronder nog moet
-    # lezen: de Add_Click-handler is dan al afgelopen en gewone lokale variabelen
-    # bestaan niet meer tegen de tijd dat de timer afgaat.
+    # als defaultuser0. Een taakplanner-taak (LogonType Interactive) bleek tijdens de
+    # OOBE onbetrouwbaar - Task Scheduler herkent de sessie van defaultuser0 kennelijk
+    # niet altijd op tijd als "interactief", waardoor de taak nooit start (time-out).
+    # Daarom nu een directe aanpak, per situatie:
+    #  - als SYSTEM (OOBE): dupliceer het token van de draaiende explorer.exe en start
+    #    het koppel-proces daarmee direct (geen Task Scheduler nodig).
+    #  - als elevated Administrator (normaal gebruik, zelfde gebruiker als Verkenner):
+    #    runas /trustlevel:0x20000 de-elevate't binnen dezelfde gebruiker.
+    # $script:-scope is vereist voor $mapSignalFile: de Add_Click-handler is al
+    # afgelopen tegen de tijd dat de Add_Tick-timer hieronder afgaat.
     $guid = [guid]::NewGuid().ToString('N')
     $script:mapSignalFile = Join-Path $env:TEMP "EOO_AzureMount_$guid.signal"
     $mapScript = @"
@@ -1223,19 +1310,24 @@ try {
     Set-Content -Path '$($script:mapSignalFile)' -Value "SIGNAL:1|`$(`$_.Exception.Message)" -Encoding UTF8
 }
 "@
-    $script:mapScriptPath = Write-TempScript -Content $mapScript -Filename "EOO_AzureMount_$guid.ps1"
-    $script:mapTaskName   = "EOO_AzureMount_$($guid.Substring(0,8))"
+    $encodedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($mapScript))
+    $psCmd      = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedCmd"
+    $isSystem   = ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq 'S-1-5-18')
 
     try {
         Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
-        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$($script:mapScriptPath)`""
-        $principal = New-ScheduledTaskPrincipal -UserId $targetUser -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $script:mapTaskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Start-ScheduledTask -TaskName $script:mapTaskName -ErrorAction Stop
+
+        if ($isSystem) {
+            $explorerProc = Get-Process -Name explorer -IncludeUserName -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $explorerProc) { throw 'kon de actieve Verkenner-sessie niet vinden.' }
+            Write-Console "  Doelgebruiker   : $($explorerProc.UserName)" 'info'
+            $err = [EOOTokenHelper]::StartAsUserOf($explorerProc.Id, $psCmd)
+            if ($err) { throw $err }
+        } else {
+            Start-Process -FilePath 'runas.exe' -ArgumentList ('/trustlevel:0x20000 "' + $psCmd + '"') -WindowStyle Hidden
+        }
     } catch {
-        Write-Console "FOUT: kon koppel-taak niet starten - $_" 'error'
-        Remove-Item $script:mapScriptPath -Force -ErrorAction SilentlyContinue
-        Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue
+        Write-Console "FOUT: kon koppel-proces niet starten - $_" 'error'
         $script:btnAzureMount.Enabled = $true
         return
     }
@@ -1260,8 +1352,6 @@ try {
                 Write-Console 'FOUT: koppelen mislukt - geen resultaat ontvangen (time-out).' 'error'
             }
             Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
-            Remove-Item $script:mapScriptPath -Force -ErrorAction SilentlyContinue
-            Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue
             $script:btnAzureMount.Enabled = $true
             Write-Console '─────────────────────────────' 'info'
         }
