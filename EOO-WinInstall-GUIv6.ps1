@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'6.3'
+$script:currentVersion = [System.Version]'6.4'
 $script:versionName    = 'Pizza Funghi'
 
 # ── Azure Files configuratie (hier aanpassen) ─────────────────────
@@ -1206,8 +1206,11 @@ $script:btnAzureMount.Add_Click({
     $targetUser = $explorerProc.UserName
     Write-Console "  Doelgebruiker   : $targetUser" 'info'
 
-    $guid       = [guid]::NewGuid().ToString('N')
-    $signalFile = Join-Path $env:TEMP "EOO_AzureMount_$guid.signal"
+    # $script:-scope is vereist voor alles wat de Add_Tick-timer hieronder nog moet
+    # lezen: de Add_Click-handler is dan al afgelopen en gewone lokale variabelen
+    # bestaan niet meer tegen de tijd dat de timer afgaat.
+    $guid = [guid]::NewGuid().ToString('N')
+    $script:mapSignalFile = Join-Path $env:TEMP "EOO_AzureMount_$guid.signal"
     $mapScript = @"
 try {
     Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { `$_.RemotePath -like '\\$sa.file.core.windows.net\*' } | ForEach-Object {
@@ -1215,24 +1218,24 @@ try {
     }
     New-SmbMapping -LocalPath 'X:' -RemotePath '\\$sa.file.core.windows.net\$sn' -UserName 'Azure\$sa' -Password '$k' -Persistent `$false -ErrorAction Stop | Out-Null
     Start-Process explorer.exe -ArgumentList 'X:\' -ErrorAction SilentlyContinue
-    Set-Content -Path '$signalFile' -Value 'SIGNAL:0|OK' -Encoding UTF8
+    Set-Content -Path '$($script:mapSignalFile)' -Value 'SIGNAL:0|OK' -Encoding UTF8
 } catch {
-    Set-Content -Path '$signalFile' -Value "SIGNAL:1|`$(`$_.Exception.Message)" -Encoding UTF8
+    Set-Content -Path '$($script:mapSignalFile)' -Value "SIGNAL:1|`$(`$_.Exception.Message)" -Encoding UTF8
 }
 "@
-    $scriptPath = Write-TempScript -Content $mapScript -Filename "EOO_AzureMount_$guid.ps1"
-    $taskName   = "EOO_AzureMount_$($guid.Substring(0,8))"
+    $script:mapScriptPath = Write-TempScript -Content $mapScript -Filename "EOO_AzureMount_$guid.ps1"
+    $script:mapTaskName   = "EOO_AzureMount_$($guid.Substring(0,8))"
 
     try {
-        Remove-Item $signalFile -Force -ErrorAction SilentlyContinue
-        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
+        Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
+        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$($script:mapScriptPath)`""
         $principal = New-ScheduledTaskPrincipal -UserId $targetUser -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        Register-ScheduledTask -TaskName $script:mapTaskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
+        Start-ScheduledTask -TaskName $script:mapTaskName -ErrorAction Stop
     } catch {
         Write-Console "FOUT: kon koppel-taak niet starten - $_" 'error'
-        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
-        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+        Remove-Item $script:mapScriptPath -Force -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue
         $script:btnAzureMount.Enabled = $true
         return
     }
@@ -1242,10 +1245,10 @@ try {
     $script:timerMapDrive.Interval = 500
     $script:timerMapDrive.Add_Tick({
         $script:mapElapsed += 500
-        if ((Test-Path $signalFile) -or ($script:mapElapsed -gt 20000)) {
+        if ((Test-Path $script:mapSignalFile) -or ($script:mapElapsed -gt 20000)) {
             $script:timerMapDrive.Stop(); $script:timerMapDrive.Dispose()
-            if (Test-Path $signalFile) {
-                $result = (Get-Content $signalFile -Raw).Trim()
+            if (Test-Path $script:mapSignalFile) {
+                $result = (Get-Content $script:mapSignalFile -Raw).Trim()
                 if ($result -match '^SIGNAL:0') {
                     Write-Console '[OK] Azure opslag gekoppeld op X:\ - Verkenner wordt geopend...' 'ok'
                     Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
@@ -1256,9 +1259,9 @@ try {
             } else {
                 Write-Console 'FOUT: koppelen mislukt - geen resultaat ontvangen (time-out).' 'error'
             }
-            Remove-Item $signalFile -Force -ErrorAction SilentlyContinue
-            Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue
-            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+            Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
+            Remove-Item $script:mapScriptPath -Force -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue
             $script:btnAzureMount.Enabled = $true
             Write-Console '─────────────────────────────' 'info'
         }
