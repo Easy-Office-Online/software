@@ -1271,13 +1271,8 @@ New-SectionLabel 'Azure opslag' ($SECT_Y + 596)
 $script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y + 620)
 Add-BtnIcon $script:btnAzureMount (New-CloudBitmap $clrAccent)
 $script:fullWidthCtrls.Add($script:btnAzureMount)
-$script:btnAzureMount.Add_Click({
-    $script:btnAzureMount.Enabled = $false
-    Write-Console '─── Azure opslag koppelen ───' 'start'
-    Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
-    Write-Console "  Share           : $($script:afShareName)" 'info'
-    Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
-
+# Voert de eigenlijke koppeling uit (aangeroepen nadat poort 445 al bereikbaar bleek).
+function Start-AzureMount {
     $sa = $script:afStorageAccount
     $sn = $script:afShareName
     $k  = $script:afKey
@@ -1289,21 +1284,28 @@ $script:btnAzureMount.Add_Click({
     # als defaultuser0. Een taakplanner-taak (LogonType Interactive) bleek tijdens de
     # OOBE onbetrouwbaar - Task Scheduler herkent de sessie van defaultuser0 kennelijk
     # niet altijd op tijd als "interactief", waardoor de taak nooit start (time-out).
-    # Daarom nu een directe aanpak, per situatie:
-    #  - als SYSTEM (OOBE): dupliceer het token van de draaiende explorer.exe en start
-    #    het koppel-proces daarmee direct (geen Task Scheduler nodig).
-    #  - als elevated Administrator (normaal gebruik, zelfde gebruiker als Verkenner):
-    #    runas /trustlevel:0x20000 de-elevate't binnen dezelfde gebruiker.
-    # $script:-scope is vereist voor $mapSignalFile: de Add_Click-handler is al
+    # Voor het normale geval (elevated Administrator, zelfde gebruiker als Verkenner)
+    # werkte de taakplanner-taak wel al correct (koppelen EN zichtbaar in Verkenner) -
+    # dus die blijft hier ongewijzigd. Alleen tijdens SYSTEM/OOBE gebruiken we in plaats
+    # daarvan directe tokenduplicatie van de draaiende explorer.exe (geen Task
+    # Scheduler nodig, dus geen sessie-herkenningsprobleem). runas /trustlevel bleek
+    # hiervoor geen goed alternatief: dat start een geheel nieuwe, losse logon-sessie
+    # waarin de Azure Files-koppeling met "Toegang geweigerd" werd geweigerd (mogelijk
+    # door een botsing met de al actieve sessie van dit elevated proces).
+    # $script:-scope is vereist voor $mapSignalFile/$mapTaskName: deze functie is al
     # afgelopen tegen de tijd dat de Add_Tick-timer hieronder afgaat.
     $guid = [guid]::NewGuid().ToString('N')
     $script:mapSignalFile = Join-Path $env:TEMP "EOO_AzureMount_$guid.signal"
+    $script:mapTaskName   = $null
     $mapScript = @"
 try {
     Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { `$_.RemotePath -like '\\$sa.file.core.windows.net\*' } | ForEach-Object {
         Remove-SmbMapping -LocalPath `$_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
     }
-    New-SmbMapping -LocalPath 'X:' -RemotePath '\\$sa.file.core.windows.net\$sn' -UserName 'Azure\$sa' -Password '$k' -Persistent `$false -ErrorAction Stop | Out-Null
+    if (Get-PSDrive -Name X -ErrorAction SilentlyContinue) { Remove-PSDrive -Name X -Force -ErrorAction SilentlyContinue }
+    `$securePwd = ConvertTo-SecureString -String '$k' -AsPlainText -Force
+    `$cred = New-Object System.Management.Automation.PSCredential('Azure\$sa', `$securePwd)
+    New-PSDrive -Name X -PSProvider FileSystem -Root '\\$sa.file.core.windows.net\$sn' -Credential `$cred -Persist -ErrorAction Stop | Out-Null
     Start-Process explorer.exe -ArgumentList 'X:\' -ErrorAction SilentlyContinue
     Set-Content -Path '$($script:mapSignalFile)' -Value 'SIGNAL:0|OK' -Encoding UTF8
 } catch {
@@ -1311,7 +1313,7 @@ try {
 }
 "@
     $encodedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($mapScript))
-    $psCmd      = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedCmd"
+    $psArgs     = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedCmd"
     $isSystem   = ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq 'S-1-5-18')
 
     try {
@@ -1321,13 +1323,18 @@ try {
             $explorerProc = Get-Process -Name explorer -IncludeUserName -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $explorerProc) { throw 'kon de actieve Verkenner-sessie niet vinden.' }
             Write-Console "  Doelgebruiker   : $($explorerProc.UserName)" 'info'
-            $err = [EOOTokenHelper]::StartAsUserOf($explorerProc.Id, $psCmd)
+            $err = [EOOTokenHelper]::StartAsUserOf($explorerProc.Id, "powershell.exe $psArgs")
             if ($err) { throw $err }
         } else {
-            Start-Process -FilePath 'runas.exe' -ArgumentList ('/trustlevel:0x20000 "' + $psCmd + '"') -WindowStyle Hidden
+            $script:mapTaskName = "EOO_AzureMount_$($guid.Substring(0,8))"
+            $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
+            $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+            Register-ScheduledTask -TaskName $script:mapTaskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
+            Start-ScheduledTask -TaskName $script:mapTaskName -ErrorAction Stop
         }
     } catch {
         Write-Console "FOUT: kon koppel-proces niet starten - $_" 'error'
+        if ($script:mapTaskName) { Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue }
         $script:btnAzureMount.Enabled = $true
         return
     }
@@ -1343,20 +1350,62 @@ try {
                 $result = (Get-Content $script:mapSignalFile -Raw).Trim()
                 if ($result -match '^SIGNAL:0') {
                     Write-Console '[OK] Azure opslag gekoppeld op X:\ - Verkenner wordt geopend...' 'ok'
-                    Write-Console '     Koppeling is tijdelijk en verdwijnt na herstart.' 'info'
+                    Write-Console '     Koppeling is persistent (blijft ook na herstart bestaan).' 'info'
                 } else {
                     Write-Console "FOUT: koppelen mislukt - $result" 'error'
-                    Write-Console '      Controleer of TCP poort 445 niet geblokkeerd is.' 'info'
                 }
             } else {
                 Write-Console 'FOUT: koppelen mislukt - geen resultaat ontvangen (time-out).' 'error'
             }
             Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
+            if ($script:mapTaskName) { Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue }
             $script:btnAzureMount.Enabled = $true
             Write-Console '─────────────────────────────' 'info'
         }
     })
     $script:timerMapDrive.Start()
+}
+
+$script:btnAzureMount.Add_Click({
+    $script:btnAzureMount.Enabled = $false
+    Write-Console '─── Azure opslag koppelen ───' 'start'
+    Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
+    Write-Console "  Share           : $($script:afShareName)" 'info'
+    Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
+    Write-Console '  Poort 445 testen...' 'info'
+
+    # Test poort 445 eerst apart, in een achtergrond-job (Test-NetConnection kan een
+    # aantal seconden duren als het poort geblokkeerd/gedropt wordt door een firewall -
+    # dat zou de GUI laten bevriezen als het synchroon op de UI-thread zou draaien).
+    $script:jobPortTest = Start-Job -ScriptBlock {
+        param($sa)
+        (Test-NetConnection -ComputerName "$sa.file.core.windows.net" -Port 445 -WarningAction SilentlyContinue).TcpTestSucceeded
+    } -ArgumentList $script:afStorageAccount
+
+    $script:timerPortTest = New-Object System.Windows.Forms.Timer
+    $script:timerPortTest.Interval = 500
+    $script:timerPortTest.Add_Tick({
+        if ($script:jobPortTest.State -notin 'Completed', 'Failed') { return }
+        $script:timerPortTest.Stop(); $script:timerPortTest.Dispose()
+
+        $portOk = $false
+        if ($script:jobPortTest.State -eq 'Completed') {
+            $portOk = [bool](Receive-Job $script:jobPortTest -ErrorAction SilentlyContinue)
+        }
+        Remove-Job $script:jobPortTest -Force
+
+        if (-not $portOk) {
+            Write-Console "FOUT: poort 445 niet bereikbaar bij $($script:afStorageAccount).file.core.windows.net." 'error'
+            Write-Console '      Controleer firewall/ISP, of gebruik Azure P2S/S2S VPN of ExpressRoute.' 'info'
+            Write-Console '─────────────────────────────' 'info'
+            $script:btnAzureMount.Enabled = $true
+            return
+        }
+
+        Write-Console '  Poort 445 bereikbaar, koppelen...' 'ok'
+        Start-AzureMount
+    })
+    $script:timerPortTest.Start()
 })
 
 # ── Sectie: Rapport ──────────────────────────────────────────────
