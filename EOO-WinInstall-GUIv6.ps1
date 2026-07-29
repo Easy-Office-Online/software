@@ -72,13 +72,13 @@ if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundCol
 $storageAccount = '##STORAGEACCOUNT##'
 $shareName      = '##SHARENAME##'
 $key            = '##KEY##'
-$file   = "$env:TEMP\Autopilot-$env:COMPUTERNAME.csv"
 try {
     Write-Host "HWID ophalen..."
     $serial = (Get-CimInstance Win32_BIOS).SerialNumber
     $dev    = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
     $hash   = $dev.DeviceHardwareData
     if (-not $hash) { throw 'Hardware hash niet gevonden.' }
+    $file   = "$env:TEMP\Autopilot-$serial.csv"
     $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
     $line   = $serial + ',,' + $hash + ',' + $GroupTag + ','
     Set-Content -Path $file -Value $header -Encoding UTF8
@@ -96,7 +96,7 @@ try {
         }
     }
     if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
-    Copy-Item -Path $file -Destination "X:\HWID\$env:COMPUTERNAME.csv" -Force
+    Copy-Item -Path $file -Destination "X:\HWID\$serial.csv" -Force
     Write-Host "OK: HWID gekopieerd naar Azure Files map HWID." -ForegroundColor Green
 } catch {
     Write-Host "FOUT: $_" -ForegroundColor Red
@@ -155,102 +155,6 @@ function Write-TempScript {
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 # EnableVisualStyles weggelaten voor Windows 95 opmaak
-
-# Helper om een proces te starten met het token van een reeds draaiend proces van de
-# ingelogde gebruiker (bv. explorer.exe), ongeacht of dit script zelf als SYSTEM draait.
-# Nodig voor de Azure-schijfkoppeling tijdens de OOBE (Shift+F10 -> powershell draait
-# als SYSTEM, terwijl Verkenner draait als defaultuser0). Vereist SeAssignPrimaryTokenPrivilege,
-# wat SYSTEM standaard heeft maar een gewone Administrator-token niet.
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class EOOTokenHelper
-{
-    private const uint PROCESS_QUERY_INFORMATION = 0x0400;
-    private const uint TOKEN_DUPLICATE = 0x0002;
-    private const uint MAXIMUM_ALLOWED = 0x02000000;
-    private const int SecurityImpersonation = 2;
-    private const int TokenPrimary = 1;
-    private const uint CREATE_NO_WINDOW = 0x08000000;
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct STARTUPINFO
-    {
-        public int cb;
-        public string lpReserved;
-        public string lpDesktop;
-        public string lpTitle;
-        public int dwX, dwY, dwXSize, dwYSize;
-        public int dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
-        public short wShowWindow, cbReserved2;
-        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PROCESS_INFORMATION
-    {
-        public IntPtr hProcess, hThread;
-        public int dwProcessId, dwThreadId;
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern bool DuplicateTokenEx(IntPtr hExistingToken, uint dwDesiredAccess, IntPtr lpTokenAttributes,
-        int ImpersonationLevel, int TokenType, out IntPtr phNewToken);
-
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, string lpCommandLine,
-        IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags,
-        IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool CloseHandle(IntPtr hObject);
-
-    public static string StartAsUserOf(int sourceProcessId, string commandLine)
-    {
-        IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, false, sourceProcessId);
-        if (hProcess == IntPtr.Zero) return "OpenProcess mislukt: " + Marshal.GetLastWin32Error();
-
-        IntPtr hToken;
-        if (!OpenProcessToken(hProcess, TOKEN_DUPLICATE, out hToken))
-        {
-            CloseHandle(hProcess);
-            return "OpenProcessToken mislukt: " + Marshal.GetLastWin32Error();
-        }
-        CloseHandle(hProcess);
-
-        IntPtr hDupToken;
-        if (!DuplicateTokenEx(hToken, MAXIMUM_ALLOWED, IntPtr.Zero, SecurityImpersonation, TokenPrimary, out hDupToken))
-        {
-            CloseHandle(hToken);
-            return "DuplicateTokenEx mislukt: " + Marshal.GetLastWin32Error();
-        }
-        CloseHandle(hToken);
-
-        STARTUPINFO si = new STARTUPINFO();
-        si.cb = Marshal.SizeOf(si);
-        si.lpDesktop = "winsta0\\default";
-
-        PROCESS_INFORMATION pi;
-        bool ok = CreateProcessAsUser(hDupToken, null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
-            CREATE_NO_WINDOW, IntPtr.Zero, null, ref si, out pi);
-        int err = Marshal.GetLastWin32Error();
-        CloseHandle(hDupToken);
-
-        if (!ok) return "CreateProcessAsUser mislukt: " + err;
-
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        return null;
-    }
-}
-"@
 
 $clrBg        = [System.Drawing.Color]::FromArgb(192, 192, 192)   # Win95 grijs
 $clrAccent    = [System.Drawing.Color]::FromArgb(0, 0, 128)        # Win95 navy (titelbalk)
@@ -1272,103 +1176,58 @@ $script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y +
 Add-BtnIcon $script:btnAzureMount (New-CloudBitmap $clrAccent)
 $script:fullWidthCtrls.Add($script:btnAzureMount)
 # Voert de eigenlijke koppeling uit (aangeroepen nadat poort 445 al bereikbaar bleek).
+#
+# De GUI draait elevated (hoge integriteit, via -Verb RunAs), maar de Verkenner
+# van de ingelogde gebruiker (bv. defaultuser0 tijdens Autopilot ESP) draait op
+# standaard integriteit. Een schijf die we vanuit dit elevated proces koppelen
+# (New-PSDrive/net use) landt daardoor in de verkeerde tokencontext en is niet
+# betrouwbaar zichtbaar in Verkenner - ook niet met EnableLinkedConnections.
+# Daarom starten we een apart, zichtbaar cmd-venster via Shell.Application: dat
+# venster wordt door explorer.exe zelf opgestart, dus in dezelfde sessie en
+# tokencontext als de ingelogde gebruiker, en de koppeling verschijnt daardoor
+# meteen in diens Verkenner.
 function Start-AzureMount {
     $sa = $script:afStorageAccount
     $sn = $script:afShareName
     $k  = $script:afKey
 
-    # Deze tool draait niet altijd als dezelfde gebruiker als de zichtbare Verkenner-
-    # shell: normaal draait hij elevated (Administrator-token via de UAC-herstart
-    # bovenaan dit script), en tijdens de OOBE (Shift+F10 -> powershell -> tool
-    # starten) draait hij zelfs als NT AUTHORITY\SYSTEM, terwijl Verkenner draait
-    # als defaultuser0. Een taakplanner-taak (LogonType Interactive) bleek tijdens de
-    # OOBE onbetrouwbaar - Task Scheduler herkent de sessie van defaultuser0 kennelijk
-    # niet altijd op tijd als "interactief", waardoor de taak nooit start (time-out).
-    # Voor het normale geval (elevated Administrator, zelfde gebruiker als Verkenner)
-    # werkte de taakplanner-taak wel al correct (koppelen EN zichtbaar in Verkenner) -
-    # dus die blijft hier ongewijzigd. Alleen tijdens SYSTEM/OOBE gebruiken we in plaats
-    # daarvan directe tokenduplicatie van de draaiende explorer.exe (geen Task
-    # Scheduler nodig, dus geen sessie-herkenningsprobleem). runas /trustlevel bleek
-    # hiervoor geen goed alternatief: dat start een geheel nieuwe, losse logon-sessie
-    # waarin de Azure Files-koppeling met "Toegang geweigerd" werd geweigerd (mogelijk
-    # door een botsing met de al actieve sessie van dit elevated proces).
-    # $script:-scope is vereist voor $mapSignalFile/$mapTaskName: deze functie is al
-    # afgelopen tegen de tijd dat de Add_Tick-timer hieronder afgaat.
-    $guid = [guid]::NewGuid().ToString('N')
-    $script:mapSignalFile = Join-Path $env:TEMP "EOO_AzureMount_$guid.signal"
-    $script:mapTaskName   = $null
-    $mapScript = @"
-try {
-    Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { `$_.RemotePath -like '\\$sa.file.core.windows.net\*' } | ForEach-Object {
-        Remove-SmbMapping -LocalPath `$_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
-    }
+    # Opruimen van een eventuele (foutieve) koppeling vanuit de elevated context zelf.
     if (Get-PSDrive -Name X -ErrorAction SilentlyContinue) { Remove-PSDrive -Name X -Force -ErrorAction SilentlyContinue }
-    `$securePwd = ConvertTo-SecureString -String '$k' -AsPlainText -Force
-    `$cred = New-Object System.Management.Automation.PSCredential('Azure\$sa', `$securePwd)
-    New-PSDrive -Name X -PSProvider FileSystem -Root '\\$sa.file.core.windows.net\$sn' -Credential `$cred -Persist -ErrorAction Stop | Out-Null
-    Start-Process explorer.exe -ArgumentList 'X:\' -ErrorAction SilentlyContinue
-    Set-Content -Path '$($script:mapSignalFile)' -Value 'SIGNAL:0|OK' -Encoding UTF8
-} catch {
-    Set-Content -Path '$($script:mapSignalFile)' -Value "SIGNAL:1|`$(`$_.Exception.Message)" -Encoding UTF8
-}
+
+    $cmdContent = @"
+@echo off
+title Azure opslag koppelen (X:)
+net use X: /delete /y >nul 2>&1
+cmdkey /add:"$sa.file.core.windows.net" /user:"localhost\$sa" /pass:"$k" >nul
+echo Bezig met koppelen van \\$sa.file.core.windows.net\$sn aan X: ...
+net use X: "\\$sa.file.core.windows.net\$sn" /persistent:yes
+if %errorlevel% neq 0 (
+    echo.
+    echo Koppelen mislukt met foutcode %errorlevel%.
+) else (
+    echo.
+    echo Azure opslag gekoppeld op X:
+    start explorer.exe X:\
+)
+echo.
+pause
 "@
-    $encodedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($mapScript))
-    $psArgs     = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedCmd"
-    $isSystem   = ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq 'S-1-5-18')
+    $cmdPath = Write-TempScript -Content $cmdContent -Filename 'EOO_MapAzureDrive.cmd'
 
-    try {
-        Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
+    $shell = New-Object -ComObject Shell.Application
+    $shell.ShellExecute('cmd.exe', "/c `"$cmdPath`"", '', 'open', 1)
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
 
-        if ($isSystem) {
-            $explorerProc = Get-Process -Name explorer -IncludeUserName -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $explorerProc) { throw 'kon de actieve Verkenner-sessie niet vinden.' }
-            Write-Console "  Doelgebruiker   : $($explorerProc.UserName)" 'info'
-            $err = [EOOTokenHelper]::StartAsUserOf($explorerProc.Id, "powershell.exe $psArgs")
-            if ($err) { throw $err }
-        } else {
-            $script:mapTaskName = "EOO_AzureMount_$($guid.Substring(0,8))"
-            $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
-            $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-            Register-ScheduledTask -TaskName $script:mapTaskName -Action $action -Principal $principal -Force -ErrorAction Stop | Out-Null
-            Start-ScheduledTask -TaskName $script:mapTaskName -ErrorAction Stop
-        }
-    } catch {
-        Write-Console "FOUT: kon koppel-proces niet starten - $_" 'error'
-        if ($script:mapTaskName) { Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue }
-        $script:btnAzureMount.Enabled = $true
-        return
-    }
-
-    $script:mapElapsed = 0
-    $script:timerMapDrive = New-Object System.Windows.Forms.Timer
-    $script:timerMapDrive.Interval = 500
-    $script:timerMapDrive.Add_Tick({
-        $script:mapElapsed += 500
-        if ((Test-Path $script:mapSignalFile) -or ($script:mapElapsed -gt 20000)) {
-            $script:timerMapDrive.Stop(); $script:timerMapDrive.Dispose()
-            if (Test-Path $script:mapSignalFile) {
-                $result = (Get-Content $script:mapSignalFile -Raw).Trim()
-                if ($result -match '^SIGNAL:0') {
-                    Write-Console '[OK] Azure opslag gekoppeld op X:\ - Verkenner wordt geopend...' 'ok'
-                    Write-Console '     Koppeling is persistent (blijft ook na herstart bestaan).' 'info'
-                } else {
-                    Write-Console "FOUT: koppelen mislukt - $result" 'error'
-                }
-            } else {
-                Write-Console 'FOUT: koppelen mislukt - geen resultaat ontvangen (time-out).' 'error'
-            }
-            Remove-Item $script:mapSignalFile -Force -ErrorAction SilentlyContinue
-            if ($script:mapTaskName) { Unregister-ScheduledTask -TaskName $script:mapTaskName -Confirm:$false -ErrorAction SilentlyContinue }
-            $script:btnAzureMount.Enabled = $true
-            Write-Console '─────────────────────────────' 'info'
-        }
-    })
-    $script:timerMapDrive.Start()
+    Write-Console '  Venster geopend om X:\ te koppelen - volg de voortgang daar.' 'info'
+    Write-Console '  Koppeling is persistent (blijft ook na herstart bestaan).' 'info'
+    Write-Console '─────────────────────────────' 'info'
+    $script:btnAzureMount.Enabled = $true
 }
 
 $script:btnAzureMount.Add_Click({
     $script:btnAzureMount.Enabled = $false
     Write-Console '─── Azure opslag koppelen ───' 'start'
+
     Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
