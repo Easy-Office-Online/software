@@ -819,14 +819,21 @@ function New-SectionLabel {
 # ── Sectie: Systeem ──────────────────────────────────────────────
 New-SectionLabel 'Systeem' $SECT_Y
 
-$btnRestart = New-EOOButton 'Restart' 22 ($SECT_Y + 24) 196 34
+$btnRestart = New-EOOButton 'Restart' 22 ($SECT_Y + 24) 135 34
 Add-BtnIcon $btnRestart (New-RestartBitmap $clrAccentDim)
 $btnRestart.Add_Click({
     Write-Console 'Systeem wordt herstart...' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /t 0' -NoNewWindow
 })
 
-$btnShutdown = New-EOOButton 'Shutdown' 226 ($SECT_Y + 24) 196 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
+$btnBios = New-EOOButton 'Naar BIOS' 165 ($SECT_Y + 24) 134 34
+Add-BtnIcon $btnBios (New-RestartBitmap $clrAccentDim)
+$btnBios.Add_Click({
+    Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen...' 'start'
+    Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /fw /t 0' -NoNewWindow
+})
+
+$btnShutdown = New-EOOButton 'Shutdown' 308 ($SECT_Y + 24) 134 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
 $btnShutdown.FlatAppearance.MouseOverBackColor = $clrDanger
 $shutdownWhite = [System.Drawing.Color]::White
 $btnShutdown.Add_MouseEnter({ $this.ForeColor = $shutdownWhite })
