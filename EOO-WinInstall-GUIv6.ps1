@@ -839,9 +839,20 @@ $btnShutdown.Add_Click({
 
 $btnBios = New-EOOButton 'Herstart naar BIOS/UEFI' 22 ($SECT_Y + 70)
 Add-BtnIcon $btnBios (New-RestartBitmap $clrAccentDim)
+$script:fullWidthCtrls.Add($btnBios)
 $btnBios.Add_Click({
     Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen...' 'start'
-    Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /fw /t 0' -NoNewWindow
+    $shutdownExe = "$env:windir\System32\shutdown.exe"
+    # Eerst eventuele al geplande shutdown/restart annuleren (bv. van Windows Update),
+    # anders wijst shutdown.exe een nieuw verzoek af (foutcode 1190) en lijkt de knop niets te doen.
+    Start-Process -FilePath $shutdownExe -ArgumentList '/a' -NoNewWindow -Wait -ErrorAction SilentlyContinue
+    $errFile = "$env:TEMP\eoo_bios_reboot_err.txt"
+    $p = Start-Process -FilePath $shutdownExe -ArgumentList '/r', '/fw', '/t', '0' -NoNewWindow -Wait -PassThru -RedirectStandardError $errFile
+    if ($p.ExitCode -ne 0) {
+        $errMsg = if (Test-Path $errFile) { (Get-Content $errFile -Raw).Trim() } else { '' }
+        Write-Console "FOUT: BIOS-herstart mislukt (exit code $($p.ExitCode)). $errMsg" 'error'
+    }
+    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 })
 
 $btnWU = New-EOOButton 'Windows Update openen' 22 ($SECT_Y + 112)
