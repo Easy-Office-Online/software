@@ -819,21 +819,14 @@ function New-SectionLabel {
 # ── Sectie: Systeem ──────────────────────────────────────────────
 New-SectionLabel 'Systeem' $SECT_Y
 
-$btnRestart = New-EOOButton 'Restart' 22 ($SECT_Y + 24) 135 34
+$btnRestart = New-EOOButton 'Restart' 22 ($SECT_Y + 24) 196 34
 Add-BtnIcon $btnRestart (New-RestartBitmap $clrAccentDim)
 $btnRestart.Add_Click({
     Write-Console 'Systeem wordt herstart...' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /t 0' -NoNewWindow
 })
 
-$btnBios = New-EOOButton 'Naar BIOS' 165 ($SECT_Y + 24) 134 34
-Add-BtnIcon $btnBios (New-RestartBitmap $clrAccentDim)
-$btnBios.Add_Click({
-    Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen...' 'start'
-    Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /fw /t 0' -NoNewWindow
-})
-
-$btnShutdown = New-EOOButton 'Shutdown' 308 ($SECT_Y + 24) 134 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
+$btnShutdown = New-EOOButton 'Shutdown' 226 ($SECT_Y + 24) 196 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
 $btnShutdown.FlatAppearance.MouseOverBackColor = $clrDanger
 $shutdownWhite = [System.Drawing.Color]::White
 $btnShutdown.Add_MouseEnter({ $this.ForeColor = $shutdownWhite })
@@ -844,7 +837,14 @@ $btnShutdown.Add_Click({
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /s /t 0' -NoNewWindow
 })
 
-$btnWU = New-EOOButton 'Windows Update openen' 22 ($SECT_Y + 70)
+$btnBios = New-EOOButton 'Herstart naar BIOS/UEFI' 22 ($SECT_Y + 70)
+Add-BtnIcon $btnBios (New-RestartBitmap $clrAccentDim)
+$btnBios.Add_Click({
+    Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen...' 'start'
+    Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /fw /t 0' -NoNewWindow
+})
+
+$btnWU = New-EOOButton 'Windows Update openen' 22 ($SECT_Y + 112)
 Add-BtnIcon $btnWU (New-WindowsBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnWU)
 $btnWU.Add_Click({
@@ -852,7 +852,7 @@ $btnWU.Add_Click({
     Start-Process 'ms-settings:windowsupdate'
 })
 
-$btnDM = New-EOOButton 'Apparaatbeheer openen' 22 ($SECT_Y + 112)
+$btnDM = New-EOOButton 'Apparaatbeheer openen' 22 ($SECT_Y + 154)
 Add-BtnIcon $btnDM (New-GearBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnDM)
 $btnDM.Add_Click({
@@ -860,7 +860,7 @@ $btnDM.Add_Click({
     Start-Process 'devmgmt.msc'
 })
 
-$btnAW = New-EOOButton 'Windows activeren' 22 ($SECT_Y + 154)
+$btnAW = New-EOOButton 'Windows activeren' 22 ($SECT_Y + 196)
 Add-BtnIcon $btnAW (New-KeyBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnAW)
 $btnAW.Add_Click({
@@ -868,7 +868,7 @@ $btnAW.Add_Click({
     Start-Process "C:\Windows\System32\slui.exe"
 })
 
-$btnWifi = New-EOOButton 'WiFi instellen: WIFI EOO_Install' 22 ($SECT_Y + 196)
+$btnWifi = New-EOOButton 'WiFi instellen: WIFI EOO_Install' 22 ($SECT_Y + 238)
 Add-BtnIcon $btnWifi (New-WifiBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnWifi)
 $btnWifi.Add_Click({
@@ -916,7 +916,7 @@ $lblKeyInput = New-Object System.Windows.Forms.Label
 $lblKeyInput.Text      = 'Productsleutel:'
 $lblKeyInput.Font      = $fntSection
 $lblKeyInput.ForeColor = $clrAccent
-$lblKeyInput.Location  = New-Object System.Drawing.Point(22, ($SECT_Y + 248))
+$lblKeyInput.Location  = New-Object System.Drawing.Point(22, ($SECT_Y + 290))
 $lblKeyInput.AutoSize  = $true
 $script:leftPanel.Controls.Add($lblKeyInput)
 
@@ -926,13 +926,13 @@ $txtKey.ForeColor   = [System.Drawing.Color]::FromArgb(0, 0, 0)
 $txtKey.BackColor   = [System.Drawing.Color]::FromArgb(255, 255, 255)
 $txtKey.BorderStyle = 'Fixed3D'
 $txtKey.MaxLength   = 29
-$txtKey.Location    = New-Object System.Drawing.Point(22, ($SECT_Y + 268))
+$txtKey.Location    = New-Object System.Drawing.Point(22, ($SECT_Y + 310))
 $txtKey.Size        = New-Object System.Drawing.Size(290, 26)
 $txtKey.CharacterCasing = 'Upper'
 $txtKey.Text        = ''
 $script:leftPanel.Controls.Add($txtKey)
 
-$btnActivateKey = New-EOOButton 'Activeren met sleutel' 22 ($SECT_Y + 308) 420 34 $clrBtnBg $clrGreen ([System.Drawing.Color]::White)
+$btnActivateKey = New-EOOButton 'Activeren met sleutel' 22 ($SECT_Y + 350) 420 34 $clrBtnBg $clrGreen ([System.Drawing.Color]::White)
 Add-BtnIcon $btnActivateKey (New-KeyBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnActivateKey)
 $btnActivateKey.Add_Click({
@@ -978,9 +978,9 @@ $btnActivateKey.Add_Click({
 })
 
 # ── Sectie: Drivers ──────────────────────────────────────────────
-New-SectionLabel 'Drivers' ($SECT_Y + 366)
+New-SectionLabel 'Drivers' ($SECT_Y + 408)
 
-$btnLSU = New-EOOButton 'Lenovo System Update installeren' 22 ($SECT_Y + 390)
+$btnLSU = New-EOOButton 'Lenovo System Update installeren' 22 ($SECT_Y + 432)
 Add-BtnIcon $btnLSU (New-ArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnLSU)
 $btnLSU.Add_Click({
@@ -1072,7 +1072,7 @@ $btnLSU.Add_Click({
     $script:timerLSU.Start()
 })
 
-$btnHPIA = New-EOOButton 'HP Image Assistant installeren en draaien' 22 ($SECT_Y + 432)
+$btnHPIA = New-EOOButton 'HP Image Assistant installeren en draaien' 22 ($SECT_Y + 474)
 Add-BtnIcon $btnHPIA (New-ArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHPIA)
 $btnHPIA.Add_Click({
@@ -1152,9 +1152,9 @@ $btnHPIA.Add_Click({
 })
 
 # ── Sectie: Autopilot ────────────────────────────────────────────
-New-SectionLabel 'Autopilot' ($SECT_Y + 488)
+New-SectionLabel 'Autopilot' ($SECT_Y + 530)
 
-$btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 ($SECT_Y + 512)
+$btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 ($SECT_Y + 554)
 Add-BtnIcon $btnHWIDOvr (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDOvr)
 $btnHWIDOvr.Add_Click({
@@ -1165,7 +1165,7 @@ $btnHWIDOvr.Add_Click({
     Write-Console "HWID Azure Files Upload (Overwrite) gestart." 'info'
 })
 
-$btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 ($SECT_Y + 554)
+$btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 ($SECT_Y + 596)
 Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($btnHWIDApp)
 $btnHWIDApp.Add_Click({
@@ -1177,9 +1177,9 @@ $btnHWIDApp.Add_Click({
 })
 
 # ── Sectie: Azure opslag ─────────────────────────────────────────
-New-SectionLabel 'Azure opslag' ($SECT_Y + 596)
+New-SectionLabel 'Azure opslag' ($SECT_Y + 638)
 
-$script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y + 620)
+$script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y + 662)
 Add-BtnIcon $script:btnAzureMount (New-CloudBitmap $clrAccent)
 $script:fullWidthCtrls.Add($script:btnAzureMount)
 # Voert de eigenlijke koppeling uit (aangeroepen nadat poort 445 al bereikbaar bleek).
@@ -1275,9 +1275,9 @@ $script:btnAzureMount.Add_Click({
 })
 
 # ── Sectie: Rapport ──────────────────────────────────────────────
-New-SectionLabel 'Rapport' ($SECT_Y + 662)
+New-SectionLabel 'Rapport' ($SECT_Y + 704)
 
-$script:btnExportPDF = New-EOOButton 'Rapport exporteren als PDF' 22 ($SECT_Y + 686)
+$script:btnExportPDF = New-EOOButton 'Rapport exporteren als PDF' 22 ($SECT_Y + 728)
 Add-BtnIcon $script:btnExportPDF (New-DownArrowBitmap $clrAccent)
 $script:fullWidthCtrls.Add($script:btnExportPDF)
 $script:btnExportPDF.Add_Click({
