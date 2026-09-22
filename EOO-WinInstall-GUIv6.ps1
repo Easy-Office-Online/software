@@ -1,12 +1,17 @@
 # ════════════════════════════════════════════════════════════════
-#  EOO – Hulp bij Windows installaties  |  Portable editie
-#  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
+#  EOO – Windows Installatie Tool  |  WPF-versie (volledig)
+#  Zelfde functionaliteit als EOO-WinInstall-GUIv6.ps1 (WinForms),
+#  opnieuw opgebouwd in WPF/XAML met een moderne stijl (rounded
+#  cards, dropshadow, vector-iconen) i.p.v. de GDI+ bitmaps.
+#  NIET pixel-perfect gelijk aan v6 -- zie eerder overleg.
+#  Draai met Windows PowerShell (powershell.exe), niet met pwsh.
+#  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
-# ── Versie (hier aanpassen bij nieuwe release) ───────────────────
+
 $script:currentVersion = [System.Version]'7.1'
 $script:versionName    = 'Pizza Gorgonzola'
 
-# ── Azure Files configuratie (hier aanpassen) ─────────────────────
+# ── Azure Files configuratie ───────────────────────────────────────
 $script:afStorageAccount = 'staceoosupportools'
 $script:afShareName      = 'eoo-support-tools'
 $script:afKey            = '7wa9oZJDVh+cTcYDiOPOB1WCE0TEzpYe/BaqQlLA85jKga3g7AKC0zMjgYlTTjgVRgTuvfxpdnJq+AStoXQFlA=='
@@ -16,54 +21,6 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }
-
-
-$script_LenovoSU = @'
-@echo off
-:: UAC elevatie
-net session >nul 2>&1
-if %errorLevel% NEQ 0 (
-    powershell -Command "Start-Process '%~f0' -Verb RunAs"
-    exit /b
-)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -EncodedCommand JABjAG8AbgBmAGkAZwBVAHIAbAAgAD0AIAAnAGgAdAB0AHAAcwA6AC8ALwByAGEAdwAuAGcAaQB0AGgAdQBiAHUAcwBlAHIAYwBvAG4AdABlAG4AdAAuAGMAbwBtAC8ARQBhAHMAeQAtAE8AZgBmAGkAYwBlAC0ATwBuAGwAaQBuAGUALwBzAG8AZgB0AHcAYQByAGUALwByAGUAZgBzAC8AaABlAGEAZABzAC8AbQBhAGkAbgAvAGwAZQBuAG8AdgBvAFMAVQAuAHQAeAB0ACcACgAKAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACcACgBXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAgACAAPQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9ACcAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAVwBoAGkAdABlAAoAVwByAGkAdABlAC0ASABvAHMAdAAgACcAIAAgACAATABlAG4AbwB2AG8AIABTAHkAcwB0AGUAbQAgAFUAcABkAGEAdABlACAASQBuAHMAdABhAGwAbABlAHIAJwAgAC0ARgBvAHIAZQBnAHIAbwB1AG4AZABDAG8AbABvAHIAIABXAGgAaQB0AGUACgBXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAgACAAPQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9AD0APQA9ACcAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAVwBoAGkAdABlAAoAVwByAGkAdABlAC0ASABvAHMAdAAgACcAJwAKAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACAAIABbADEALwA0AF0AIABDAG8AbgBmAGkAZwAgAG8AcABoAGEAbABlAG4AIAB2AGEAbgAgAEcAaQB0AEgAdQBiAC4ALgAuACcAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAVwBoAGkAdABlAAoACgB0AHIAeQAgAHsACgAgACAAIAAgACQAcgBhAHcAIAA9ACAAKABJAG4AdgBvAGsAZQAtAFcAZQBiAFIAZQBxAHUAZQBzAHQAIAAtAFUAcgBpACAAJABjAG8AbgBmAGkAZwBVAHIAbAAgAC0AVQBzAGUAQgBhAHMAaQBjAFAAYQByAHMAaQBuAGcAKQAuAEMAbwBuAHQAZQBuAHQACgAgACAAIAAgACQAdgBlAHIAcwBpAG8AbgAgAD0AIAAoACQAcgBhAHcAIAAtAHMAcABsAGkAdAAgACIAYABuACIAIAB8ACAAVwBoAGUAcgBlAC0ATwBiAGoAZQBjAHQAIAB7ACAAJABfACAALQBtAGEAdABjAGgAIAAnAF4AVgBlAHIAcwBpAG8AbgAnACAAfQApAC4AUwBwAGwAaQB0ACgAJwA9ACcAKQBbADEAXQAuAFQAcgBpAG0AKAApAC4AVAByAGkAbQAoACcAIgAnACkACgAgACAAIAAgACQAdQByAGwAIAAgACAAIAAgAD0AIAAoACQAcgBhAHcAIAAtAHMAcABsAGkAdAAgACIAYABuACIAIAB8ACAAVwBoAGUAcgBlAC0ATwBiAGoAZQBjAHQAIAB7ACAAJABfACAALQBtAGEAdABjAGgAIAAnAF4AVQBSAEwAJwAgAH0AKQAuAFMAcABsAGkAdAAoACcAPQAnACwAMgApAFsAMQBdAC4AVAByAGkAbQAoACkALgBUAHIAaQBtACgAJwAiACcAKQAKAAoAIAAgACAAIABpAGYAIAAoAC0AbgBvAHQAIAAkAHYAZQByAHMAaQBvAG4AIAAtAG8AcgAgAC0AbgBvAHQAIAAkAHUAcgBsACkAIAB7AAoAIAAgACAAIAAgACAAIAAgAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACAAIABbAEYATwBVAFQAXQAgAEMAbwBuAGYAaQBnACAAbwBuAHYAbwBsAGwAZQBkAGkAZwA6ACAAdgBlAHIAcwBpAG8AbgAgAG8AZgAgAHUAcgBsACAAbwBuAHQAYgByAGUAZQBrAHQALgAnACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAFIAZQBkAAoAIAAgACAAIAAgACAAIAAgAFIAZQBhAGQALQBIAG8AcwB0ACAAJwAgACAARAByAHUAawAgAG8AcAAgAEUAbgB0AGUAcgAgAG8AbQAgAHQAZQAgAHMAbAB1AGkAdABlAG4AJwAKACAAIAAgACAAIAAgACAAIABlAHgAaQB0ACAAMQAKACAAIAAgACAAfQAKAAoAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAIgAgACAAIAAgACAAIAAgACAAVgBlAHIAcwBpAGUAIAA6ACAAJAB2AGUAcgBzAGkAbwBuACIAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAARwByAGUAZQBuAAoAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAIgAgACAAIAAgACAAIAAgACAAVQBSAEwAIAAgACAAIAA6ACAAJAB1AHIAbAAiACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAEcAcgBlAGUAbgAKAH0AIABjAGEAdABjAGgAIAB7AAoAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAIgAgACAAWwBGAE8AVQBUAF0AIABDAG8AbgBmAGkAZwAgAG8AcABoAGEAbABlAG4AIABtAGkAcwBsAHUAawB0ADoAIAAkAF8AIgAgAC0ARgBvAHIAZQBnAHIAbwB1AG4AZABDAG8AbABvAHIAIABSAGUAZAAKACAAIAAgACAAUgBlAGEAZAAtAEgAbwBzAHQAIAAnACAAIABEAHIAdQBrACAAbwBwACAARQBuAHQAZQByACAAbwBtACAAdABlACAAcwBsAHUAaQB0AGUAbgAnAAoAIAAgACAAIABlAHgAaQB0ACAAMQAKAH0ACgAKAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACcACgBXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAgACAAWwAyAC8ANABdACAAQwBvAG4AdAByAG8AbABlAHIAZQBuACAAbwBmACAATABlAG4AbwB2AG8AIABTAHkAcwB0AGUAbQAgAFUAcABkAGEAdABlACAAYQBsACAAZwBlAGkAbgBzAHQAYQBsAGwAZQBlAHIAZAAgAGkAcwAuAC4ALgAnACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAFcAaABpAHQAZQAKAAoAJAByAGUAZwBQAGEAdABoAHMAIAA9ACAAQAAoAAoAIAAgACAAIAAnAEgASwBMAE0AOgBcAFMATwBGAFQAVwBBAFIARQBcAE0AaQBjAHIAbwBzAG8AZgB0AFwAVwBpAG4AZABvAHcAcwBcAEMAdQByAHIAZQBuAHQAVgBlAHIAcwBpAG8AbgBcAFUAbgBpAG4AcwB0AGEAbABsAFwAKgAnACwACgAgACAAIAAgACcASABLAEwATQA6AFwAUwBPAEYAVABXAEEAUgBFAFwAVwBPAFcANgA0ADMAMgBOAG8AZABlAFwATQBpAGMAcgBvAHMAbwBmAHQAXABXAGkAbgBkAG8AdwBzAFwAQwB1AHIAcgBlAG4AdABWAGUAcgBzAGkAbwBuAFwAVQBuAGkAbgBzAHQAYQBsAGwAXAAqACcACgApAAoAJABpAG4AcwB0AGEAbABsAGUAZAAgAD0AIABHAGUAdAAtAEkAdABlAG0AUAByAG8AcABlAHIAdAB5ACAAJAByAGUAZwBQAGEAdABoAHMAIAAtAEUAcgByAG8AcgBBAGMAdABpAG8AbgAgAFMAaQBsAGUAbgB0AGwAeQBDAG8AbgB0AGkAbgB1AGUAIAB8ACAAVwBoAGUAcgBlAC0ATwBiAGoAZQBjAHQAIAB7ACAAJABfAC4ARABpAHMAcABsAGEAeQBOAGEAbQBlACAALQBsAGkAawBlACAAJwAqAEwAZQBuAG8AdgBvACAAUwB5AHMAdABlAG0AIABVAHAAZABhAHQAZQAqACcAIAB9AAoACgBpAGYAIAAoACQAaQBuAHMAdABhAGwAbABlAGQAKQAgAHsACgAgACAAIAAgAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAiACAAIAAgACAAIAAgACAAIABHAGUAdgBvAG4AZABlAG4AOgAgACQAKAAkAGkAbgBzAHQAYQBsAGwAZQBkAC4ARABpAHMAcABsAGEAeQBOAGEAbQBlACkAIgAgAC0ARgBvAHIAZQBnAHIAbwB1AG4AZABDAG8AbABvAHIAIABZAGUAbABsAG8AdwAKACAAIAAgACAAVwByAGkAdABlAC0ASABvAHMAdAAgACIAIAAgACAAIAAgACAAIAAgAEcAZQBpAG4AcwB0AGEAbABsAGUAZQByAGQAZQAgAHYAZQByAHMAaQBlADoAIAAkACgAJABpAG4AcwB0AGEAbABsAGUAZAAuAEQAaQBzAHAAbABhAHkAVgBlAHIAcwBpAG8AbgApACIAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAWQBlAGwAbABvAHcACgAgACAAIAAgAGkAZgAgACgAJABpAG4AcwB0AGEAbABsAGUAZAAuAEQAaQBzAHAAbABhAHkAVgBlAHIAcwBpAG8AbgAgAC0AZQBxACAAJAB2AGUAcgBzAGkAbwBuACkAIAB7AAoAIAAgACAAIAAgACAAIAAgAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAiACAAIAAgACAAIAAgACAAIABBAGwAIAB1AHAALQB0AG8ALQBkAGEAdABlACAAKAAkAHYAZQByAHMAaQBvAG4AKQAuACAARwBlAGUAbgAgAGkAbgBzAHQAYQBsAGwAYQB0AGkAZQAgAG4AbwBkAGkAZwAuACIAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAARwByAGUAZQBuAAoAIAAgACAAIAAgACAAIAAgAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACcACgAgACAAIAAgACAAIAAgACAAUgBlAGEAZAAtAEgAbwBzAHQAIAAnACAAIABEAHIAdQBrACAAbwBwACAARQBuAHQAZQByACAAbwBtACAAdABlACAAcwBsAHUAaQB0AGUAbgAnAAoAIAAgACAAIAAgACAAIAAgAGUAeABpAHQAIAAwAAoAIAAgACAAIAB9ACAAZQBsAHMAZQAgAHsACgAgACAAIAAgACAAIAAgACAAVwByAGkAdABlAC0ASABvAHMAdAAgACIAIAAgACAAIAAgACAAIAAgAEEAbgBkAGUAcgBlACAAdgBlAHIAcwBpAGUAIABnAGUAdgBvAG4AZABlAG4ALAAgAGQAbwBvAHIAZwBhAGEAbgAgAG0AZQB0ACAAaQBuAHMAdABhAGwAbABhAHQAaQBlACAAdgBhAG4AIAAkAHYAZQByAHMAaQBvAG4ALgAuAC4AIgAgAC0ARgBvAHIAZQBnAHIAbwB1AG4AZABDAG8AbABvAHIAIABDAHkAYQBuAAoAIAAgACAAIAB9AAoAfQAgAGUAbABzAGUAIAB7AAoAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAgACAAIAAgACAAIAAgACAATgBpAGUAdAAgAGcAZQBpAG4AcwB0AGEAbABsAGUAZQByAGQALAAgAGQAbwBvAHIAZwBhAGEAbgAgAG0AZQB0ACAAaQBuAHMAdABhAGwAbABhAHQAaQBlAC4ALgAuACcAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAQwB5AGEAbgAKAH0ACgAKAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACcACgBXAHIAaQB0AGUALQBIAG8AcwB0ACAAIgAgACAAWwAzAC8ANABdACAASQBuAHMAdABhAGwAbABlAHIAIABkAG8AdwBuAGwAbwBhAGQAZQBuACAAKAB2ACQAdgBlAHIAcwBpAG8AbgApAC4ALgAuACIAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAVwBoAGkAdABlAAoACgAkAGkAbgBzAHQAYQBsAGwAZQByACAAPQAgACIAJABlAG4AdgA6AFQARQBNAFAAXABMAGUAbgBvAHYAbwBTAHkAcwB0AGUAbQBVAHAAZABhAHQAZQBfACQAdgBlAHIAcwBpAG8AbgAuAGUAeABlACIACgB0AHIAeQAgAHsACgAgACAAIAAgAEkAbgB2AG8AawBlAC0AVwBlAGIAUgBlAHEAdQBlAHMAdAAgAC0AVQByAGkAIAAkAHUAcgBsACAALQBPAHUAdABGAGkAbABlACAAJABpAG4AcwB0AGEAbABsAGUAcgAgAC0AVQBzAGUAQgBhAHMAaQBjAFAAYQByAHMAaQBuAGcACgAgACAAIAAgAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAnACAAIAAgACAAIAAgACAAIABEAG8AdwBuAGwAbwBhAGQAIABnAGUAcwBsAGEAYQBnAGQALgAnACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAEcAcgBlAGUAbgAKAH0AIABjAGEAdABjAGgAIAB7AAoAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAIgAgACAAWwBGAE8AVQBUAF0AIABEAG8AdwBuAGwAbwBhAGQAIABtAGkAcwBsAHUAawB0ADoAIAAkAF8AIgAgAC0ARgBvAHIAZwByAG8AdQBuAGQAQwBvAGwAbwByACAAUgBlAGQACgAgACAAIAAgAFIAZQBhAGQALQBIAG8AcwB0ACAAJwAgACAARAByAHUAawAgAG8AcAAgAEUAbgB0AGUAcgAgAG8AbQAgAHQAZQAgAHMAbAB1AGkAdABlAG4AJwAKACAAIAAgACAAZQB4AGkAdAAgADEACgB9AAoACgBXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAnAAoAVwByAGkAdABlAC0ASABvAHMAdAAgACcAIAAgAFsANAAvADQAXQAgAEkAbgBzAHQAYQBsAGwAZQByAGUAbgAuAC4ALgAnACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAFcAaABpAHQAZQAKAAoAdAByAHkAIAB7AAoAIAAgACAAIAAkAHAAIAA9ACAAUwB0AGEAcgB0AC0AUAByAG8AYwBlAHMAcwAgAC0ARgBpAGwAZQBQAGEAdABoACAAJABpAG4AcwB0AGEAbABsAGUAcgAgAC0AQQByAGcAdQBtAGUAbgB0AEwAaQBzAHQAIAAnAC8AVgBFAFIAWQBTAEkATABFAE4AVAAgAC8ATgBPAFIARQBTAFQAQQBSAFQAJwAgAC0AVwBhAGkAdAAgAC0AUABhAHMAcwBUAGgAcgB1AAoAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAnAAoAIAAgACAAIABpAGYAIAAoACQAcAAuAEUAeABpAHQAQwBvAGQAZQAgAC0AZQBxACAAMAApACAAewAKACAAIAAgACAAIAAgACAAIABXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAgACAAWwBPAEsAXQAgACAAIABMAGUAbgBvAHYAbwAgAFMAeQBzAHQAZQBtACAAVQBwAGQAYQB0AGUAIABzAHUAYwBjAGUAcwB2AG8AbACAAZwBlAGkAbgBzAHQAYQBsAGwAZQBlAHIAZAAuACcAIAAtAEYAbwByAGUAZwByAG8AdQBuAGQAQwBvAGwAbwByACAARwByAGUAZQBuAAoAIAAgACAAIAB9ACAAZQBsAHMAZQAgAHsACgAgACAAIAAgACAAIAAgACAAVwByAGkAdABlAC0ASABvAHMAdAAgACIAIAAgAFsARgBPAFUAVABdACAASQBuAHMAdABhAGwAbABhAHQAaQBlACAAbQBpAHMAbAB1AGsAdAAuACAARQB4AGkAdAAgAGMAbwBkAGUAOgAgACQAKAAkAHAALgBFAHgAaQB0AEMAbwBkAGUAKQAiACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAFIAZQBkAAoAIAAgACAAIAB9AAoAfQAgAGMAYQB0AGMAaAAgAHsACgAgACAAIAAgAFcAcgBpAHQAZQAtAEgAbwBzAHQAIAAiACAAIABbAEYATwBVAFQAXQAgAEkAbgBzAHQAYQBsAGwAYQB0AGkAZQAgAG0AaQBzAGwAdQBrAHQAOgAgACQAXwAiACAALQBGAG8AcgBlAGcAcgBvAHUAbgBkAEMAbwBsAG8AcgAgAFIAZQBkAAoAfQAgAGYAaQBuAGEAbABsAHkAIAB7AAoAIAAgACAAIABpAGYAIAAoAFQAZQBzAHQALQBQAGEAdABoACAAJABpAG4AcwB0AGEAbABsAGUAcgApACAAewAgAFIAZQBtAG8AdgBlAC0ASQB0AGUAbQAgACQAaQBuAHMAdABhAGwAbABlAHIAIAAtAEYAbwByAGMAZQAgAH0ACgB9AAoACgBXAHIAaQB0AGUALQBIAG8AcwB0ACAAJwAnAAoAUgBlAGEAZAAtAEgAbwBzAHQAIAAnACAAIABEAHIAdQBrACAAbwBwACAARQBuAHQAZQByACAAbwBtACAAdABlACAAcwBsAHUAaQB0AGUAbgAnAAoA
-'@
-
-$script_HPIA = @'
-@echo off
-net session >nul 2>&1
-if %errorLevel% NEQ 0 ( PowerShell -Command "Start-Process -FilePath '%~f0' -Verb RunAs" & exit /b )
-set "PS=%TEMP%\hpia_install.ps1"
-(
-echo $PackageName = "HPIA"
-echo $TextFileURL = "https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/hpia.txt"
-echo $text = Invoke-RestMethod -Uri $TextFileURL
-echo $version = $null; $url = $null
-echo foreach ($line in $text -split "`r`n"^) {
-echo     if ($line -match 'Version = "(.+)"'^) { $version = $matches[1] }
-echo     if ($line -match 'URL = "(.*)"'^) { $url = $matches[1] }
-echo }
-echo $folderPath = "C:\ProgramData\eoo\$PackageName"
-echo $filename = [System.IO.Path]::GetFileName($url^)
-echo $filepath = "$folderPath\$filename"
-echo if (-not (Test-Path $folderPath^)^) { New-Item -Path $folderPath -ItemType Directory ^| Out-Null }
-echo Invoke-WebRequest -Uri $url -OutFile $filepath
-echo New-Item -ItemType Directory -Path "C:\HPIA" -Force ^| Out-Null
-echo New-Item -ItemType Directory -Path "C:\HPIAReport" -Force ^| Out-Null
-echo Start-Process -FilePath $filepath -ArgumentList '/s /e' -Wait
-echo $timeout = 120; $elapsed = 0; $found = $null
-echo do { Start-Sleep -Seconds 3; $elapsed += 3; $found = Get-ChildItem -Path "C:\SWSetup" -Filter "HPImageAssistant.exe" -Recurse -ErrorAction SilentlyContinue ^| Select-Object -First 1 } while (-not $found -and $elapsed -lt $timeout^)
-echo if (-not $found^) { Write-Host "FOUT: HPImageAssistant.exe niet gevonden."; exit 1 }
-echo Copy-Item -Path "$($found.DirectoryName)\*" -Destination "C:\HPIA" -Recurse -Force
-echo Remove-Item -Path $found.DirectoryName -Recurse -Force -ErrorAction SilentlyContinue
-echo Remove-Item $filepath -ErrorAction SilentlyContinue
-echo Start-Process -FilePath "C:\HPIA\HPImageAssistant.exe" -ArgumentList "/Operation:Analyze /Category:All /Selection:All /Action:Install /Silent /ReportFolder:C:\HPIAReport" -NoNewWindow -Wait
-echo Write-Host "Klaar! Rapport staat in C:\HPIAReport"
-) > "%PS%"
-PowerShell -NoProfile -ExecutionPolicy Bypass -File "%PS%"
-del "%PS%"
-pause
-'@
 
 $script_HWID_Overwrite = @'
 $ErrorActionPreference = 'Stop'
@@ -148,758 +105,704 @@ Read-Host "Druk op Enter om te sluiten"
 function Write-TempScript {
     param([string]$Content, [string]$Filename)
     $path = Join-Path $env:TEMP $Filename
-    [System.IO.File]::WriteAllText($path, ($Content -replace "`r`n","`n" -replace "`n","`r`n"))
+    [System.IO.File]::WriteAllText($path, ($Content -replace "`r`n", "`n" -replace "`n", "`r`n"))
     return $path
 }
 
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Windows.Forms.Application]::EnableVisualStyles()
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Drawing
 
-# ── Modern kleurenpalet (offwit + EOO blauw, uit het logo gesampled) ─
-$clrBg        = [System.Drawing.Color]::FromArgb(250, 249, 246)    # Offwit achtergrond
-$clrCard      = [System.Drawing.Color]::FromArgb(255, 255, 255)    # Kaart/paneel achtergrond
-$clrBorder    = [System.Drawing.Color]::FromArgb(228, 225, 219)    # Subtiele warme randkleur
-$clrAccent    = [System.Drawing.Color]::FromArgb(32, 138, 208)     # EOO blauw (logo-kleur)
-$clrAccentDark= [System.Drawing.Color]::FromArgb(3, 23, 61)        # EOO donkerblauw/navy (logo-kleur)
-$clrAccentDim = [System.Drawing.Color]::FromArgb(3, 23, 61)        # Hoofdtekst (EOO donkerblauw)
-$clrSubText   = [System.Drawing.Color]::FromArgb(100, 108, 122)    # Subtekst (blauwgrijs)
+# ════════════════════════════════════════════════════════════════
+#  UI
+# ════════════════════════════════════════════════════════════════
+[xml]$xaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="EOO - Windows Installatie Tool"
+        Width="980" Height="720" MinWidth="640" MinHeight="500"
+        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI">
+    <Window.Resources>
+        <SolidColorBrush x:Key="BrushBg"        Color="#FAF9F6"/>
+        <SolidColorBrush x:Key="BrushCard"      Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BrushBorder"    Color="#E4E1DB"/>
+        <SolidColorBrush x:Key="BrushAccent"    Color="#208AD0"/>
+        <SolidColorBrush x:Key="BrushAccentDark" Color="#03173D"/>
+        <SolidColorBrush x:Key="BrushSubText"   Color="#646C7A"/>
+        <SolidColorBrush x:Key="BrushDanger"    Color="#DC2626"/>
+        <SolidColorBrush x:Key="BrushConsoleDefault" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="BrushConsoleOk"       Color="#60BEF0"/>
+        <SolidColorBrush x:Key="BrushConsoleError"    Color="#F87171"/>
+        <SolidColorBrush x:Key="BrushConsoleStart"    Color="#FACC15"/>
 
-$clrBtnBg     = [System.Drawing.Color]::FromArgb(255, 255, 255)    # Witte knop
-$clrBtnHover  = [System.Drawing.Color]::FromArgb(32, 138, 208)     # EOO blauw hover
-$clrBtnHoverFg= [System.Drawing.Color]::FromArgb(255, 255, 255)    # Wit hover tekst
-$clrDanger    = [System.Drawing.Color]::FromArgb(220, 38, 38)      # Modern rood
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushAccentDark}"/>
+            <Setter Property="Margin" Value="0,18,0,6"/>
+        </Style>
 
-$fntTitle   = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-$fntSub     = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
-$fntLabel   = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
-$fntSection = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Bold)
-$fntBtn     = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
+        <Style x:Key="OutlineButton" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{StaticResource BrushCard}"
+                                BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.08" Color="#000000"/>
+                            </Border.Effect>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0">
+                                <Path x:Name="PART_Icon" Width="15" Height="15" Stretch="Uniform" Margin="0,0,10,0"
+                                      Fill="{StaticResource BrushAccentDark}" Data="{TemplateBinding Tag}"/>
+                                <TextBlock x:Name="PART_Text" Text="{TemplateBinding Content}"
+                                           Foreground="{StaticResource BrushAccentDark}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushAccent}"/>
+                                <Setter TargetName="PART_Icon" Property="Fill" Value="White"/>
+                                <Setter TargetName="PART_Text" Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-# EOO logo laden vanuit GitHub
-$script:logoImage = $null
+        <Style x:Key="DangerOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{StaticResource BrushCard}"
+                                BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.08" Color="#000000"/>
+                            </Border.Effect>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0">
+                                <Path x:Name="PART_Icon" Width="15" Height="15" Stretch="Uniform" Margin="0,0,10,0"
+                                      Fill="{StaticResource BrushAccentDark}" Data="{TemplateBinding Tag}"/>
+                                <TextBlock x:Name="PART_Text" Text="{TemplateBinding Content}"
+                                           Foreground="{StaticResource BrushAccentDark}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushDanger}"/>
+                                <Setter TargetName="PART_Icon" Property="Fill" Value="White"/>
+                                <Setter TargetName="PART_Text" Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="8">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="1,0" EndPoint="0,0">
+                                    <GradientStop Color="#208AD0" Offset="0"/>
+                                    <GradientStop Color="#03173D" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.18" Color="#03173D"/>
+                            </Border.Effect>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Path Width="15" Height="15" Stretch="Uniform" Margin="0,0,10,0" Fill="White" Data="{TemplateBinding Tag}"/>
+                                <TextBlock Text="{TemplateBinding Content}" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="KeyInput" TargetType="TextBox">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushAccentDark}"/>
+            <Setter Property="Background" Value="{StaticResource BrushCard}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter Margin="0,1"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{StaticResource BrushBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="110"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid x:Name="HeaderGrid" Grid.Row="0">
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#208AD0" Offset="0"/>
+                    <GradientStop Color="#03173D" Offset="1"/>
+                </LinearGradientBrush>
+            </Grid.Background>
+            <Image x:Name="ImgLogo" Width="230" Height="98" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,5,0,0" Stretch="Uniform"/>
+            <TextBlock x:Name="TxtLogoFallback" Text="EOO" Foreground="White" FontSize="22" FontWeight="Bold"
+                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,24,0,0" Visibility="Collapsed"/>
+            <TextBlock Text="Windows Installatie Tool" Foreground="White" FontSize="14"
+                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="252,50,0,0"/>
+            <TextBlock x:Name="TxtVersion" Foreground="#CBD5E1" FontSize="11"
+                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,88,16,0"/>
+            <Border Height="3" VerticalAlignment="Bottom" Background="{StaticResource BrushAccent}"/>
+        </Grid>
+
+        <!-- Content: links infopanel + acties, rechts console -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="420"/>
+                <ColumnDefinition Width="3"/>
+                <ColumnDefinition Width="*" MinWidth="200"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="{StaticResource BrushBg}">
+                <StackPanel Margin="22,14,22,20" MaxWidth="500" HorizontalAlignment="Left">
+
+                    <Border Background="{StaticResource BrushCard}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="10" Padding="16">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.06" Color="#000000"/>
+                        </Border.Effect>
+                        <DockPanel LastChildFill="True">
+                            <TextBlock x:Name="TxtRefresh" DockPanel.Dock="Bottom" Text="&#8635; Vernieuwen"
+                                       Foreground="{StaticResource BrushAccent}" FontSize="11" HorizontalAlignment="Right"
+                                       Margin="0,8,0,0" Cursor="Hand"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="70"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel x:Name="InfoRows" Grid.Column="0"/>
+                                <TextBlock x:Name="TxtBigStatus" Grid.Column="1" Text="" FontSize="40" FontWeight="Bold"
+                                           Foreground="{StaticResource BrushAccent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Systeem -->
+                    <TextBlock Text="Systeem" Style="{StaticResource SectionTitle}"/>
+                    <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="BtnRestart" Grid.Column="0" Content="Herstarten" Style="{StaticResource OutlineButton}"/>
+                        <Button x:Name="BtnShutdown" Grid.Column="2" Content="Afsluiten" Style="{StaticResource DangerOutlineButton}"/>
+                    </Grid>
+                    <Button x:Name="BtnBios" Content="Herstart naar BIOS/UEFI" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnWU" Content="Windows Update openen" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnDM" Content="Apparaatbeheer openen" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnAW" Content="Windows activeren" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnWifi" Content="WiFi instellen: EOO_Install" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="Productsleutel" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}" Margin="0,10,0,6" FontSize="12"/>
+                    <TextBox x:Name="TxtKey" Style="{StaticResource KeyInput}" MaxLength="29" Margin="0,0,0,8" HorizontalAlignment="Left" Width="300"/>
+                    <Button x:Name="BtnActivateKey" Content="Activeren met sleutel" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
+
+                    <!-- Drivers -->
+                    <TextBlock Text="Drivers" Style="{StaticResource SectionTitle}"/>
+                    <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
+                    <Button x:Name="BtnLSU" Content="Lenovo System Update installeren" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnHPIA" Content="HP Image Assistant installeren en draaien" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+
+                    <!-- Autopilot -->
+                    <TextBlock Text="Autopilot" Style="{StaticResource SectionTitle}"/>
+                    <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
+                    <Button x:Name="BtnHWIDOvr" Content="HWID Export - Overwrite (per device)" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnHWIDApp" Content="HWID Export - Append (bulk CSV)" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+
+                    <!-- Azure opslag -->
+                    <TextBlock Text="Azure opslag" Style="{StaticResource SectionTitle}"/>
+                    <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
+                    <Button x:Name="BtnAzureMount" Content="Azure opslag koppelen (X:)" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+
+                    <!-- Rapport -->
+                    <TextBlock Text="Rapport" Style="{StaticResource SectionTitle}"/>
+                    <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
+                    <Button x:Name="BtnExportPDF" Content="Rapport exporteren als PDF" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="3" HorizontalAlignment="Stretch" Background="#808080" ResizeBehavior="PreviousAndNext"/>
+
+            <Grid Grid.Column="2" Background="{StaticResource BrushAccentDark}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Uitvoer" Foreground="White" FontWeight="Bold" Margin="12,10,0,6"/>
+                <ListBox x:Name="LstConsole" Grid.Row="1" Background="Transparent" BorderThickness="0"
+                         FontFamily="Consolas" FontSize="12" Margin="8,0,8,8" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+            </Grid>
+        </Grid>
+
+        <!-- Footer -->
+        <Grid Grid.Row="2" Background="{StaticResource BrushCard}">
+            <Border Height="1" VerticalAlignment="Top" Background="{StaticResource BrushBorder}"/>
+            <TextBlock Text="Easy Office Online  |  eoo.nl" Foreground="{StaticResource BrushSubText}" FontSize="11"
+                       HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <TextBlock x:Name="TxtDate" Foreground="{StaticResource BrushSubText}" FontSize="11"
+                       HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        </Grid>
+    </Grid>
+</Window>
+'@
+
+$reader = New-Object System.Xml.XmlNodeReader $xaml
+$window = [Windows.Markup.XamlReader]::Load($reader)
+
+# ── Elementen ophalen ──────────────────────────────────────────────
+$headerGrid      = $window.FindName('HeaderGrid')
+$imgLogo         = $window.FindName('ImgLogo')
+$txtLogoFallback = $window.FindName('TxtLogoFallback')
+$txtVersion      = $window.FindName('TxtVersion')
+$txtDate         = $window.FindName('TxtDate')
+$infoRows        = $window.FindName('InfoRows')
+$txtBigStatus    = $window.FindName('TxtBigStatus')
+$txtRefresh      = $window.FindName('TxtRefresh')
+$lstConsole      = $window.FindName('LstConsole')
+
+$btnRestart      = $window.FindName('BtnRestart')
+$btnShutdown     = $window.FindName('BtnShutdown')
+$btnBios         = $window.FindName('BtnBios')
+$btnWU           = $window.FindName('BtnWU')
+$btnDM           = $window.FindName('BtnDM')
+$btnAW           = $window.FindName('BtnAW')
+$btnWifi         = $window.FindName('BtnWifi')
+$txtKey          = $window.FindName('TxtKey')
+$btnActivateKey  = $window.FindName('BtnActivateKey')
+$btnLSU          = $window.FindName('BtnLSU')
+$btnHPIA         = $window.FindName('BtnHPIA')
+$btnHWIDOvr      = $window.FindName('BtnHWIDOvr')
+$btnHWIDApp      = $window.FindName('BtnHWIDApp')
+$btnAzureMount   = $window.FindName('BtnAzureMount')
+$btnExportPDF    = $window.FindName('BtnExportPDF')
+
+$txtVersion.Text = "v$script:currentVersion - $script:versionName"
+$txtDate.Text     = (Get-Date -Format 'dd-MM-yyyy')
+
+# ── Vector-iconen (Material Design paden) ──────────────────────────
+$iconPaths = @{
+    Restart  = 'M17.65,6.35C16.2,4.9 14.21,4 12,4c-4.42,0 -7.99,3.58 -7.99,8s3.57,8 7.99,8c3.73,0 6.84,-2.55 7.73,-6h-2.08c-0.82,2.33 -3.04,4 -5.65,4 -3.31,0 -6,-2.69 -6,-6s2.69,-6 6,-6c1.66,0 3.14,0.69 4.22,1.78L13,11h7V4L17.65,6.35z'
+    Power    = 'M13,3h-2v10h2V3z M17.83,5.17l-1.42,1.42C17.99,7.86,19,9.81,19,12c0,3.87-3.13,7-7,7s-7-3.13-7-7c0-2.19,1.01-4.14,2.58-5.42L6.17,5.17C4.23,6.82,3,9.26,3,12c0,4.97,4.03,9,9,9s9-4.03,9-9C21,9.26,19.77,6.82,17.83,5.17z'
+    Windows  = 'M3,12V6.75L9,5.43V11.91L3,12M20,3V11.75L10,11.9V5.21L20,3M3,13L9,13.09V19.9L3,18.75V13M20,13.25V22L10,20.09V13.1L20,13.25Z'
+    Gear     = 'M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.22,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.22,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z'
+    Key      = 'M7,14A2,2 0 0,1 5,12A2,2 0 0,1 7,10A2,2 0 0,1 9,12A2,2 0 0,1 7,14M12.65,10C11.83,7.67 9.61,6 7,6A6,6 0 0,0 1,12A6,6 0 0,0 7,18C9.61,18 11.83,16.33 12.65,14H17V18H21V14H23V10H12.65Z'
+    Wifi     = 'M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z'
+    Cloud    = 'M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04Z'
+    Download = 'M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z'
+    Play     = 'M8,5V19L19,12L8,5Z'
+}
+function Get-IconGeometry { param([string]$Name) [System.Windows.Media.Geometry]::Parse($iconPaths[$Name]) }
+
+$btnRestart.Tag     = Get-IconGeometry Restart
+$btnShutdown.Tag    = Get-IconGeometry Power
+$btnBios.Tag        = Get-IconGeometry Restart
+$btnWU.Tag          = Get-IconGeometry Windows
+$btnDM.Tag          = Get-IconGeometry Gear
+$btnAW.Tag          = Get-IconGeometry Key
+$btnWifi.Tag        = Get-IconGeometry Wifi
+$btnActivateKey.Tag = Get-IconGeometry Key
+$btnLSU.Tag         = Get-IconGeometry Play
+$btnHPIA.Tag        = Get-IconGeometry Play
+$btnHWIDOvr.Tag     = Get-IconGeometry Download
+$btnHWIDApp.Tag     = Get-IconGeometry Download
+$btnAzureMount.Tag  = Get-IconGeometry Cloud
+$btnExportPDF.Tag   = Get-IconGeometry Download
+
+# ── Logo laden (WPF-weergave + los GDI+-exemplaar t.b.v. PDF-export) ─
 try {
     $logoBytes = (Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/EOO_Logo_rgb2.png' -UseBasicParsing).Content
-    $logoStream = New-Object System.IO.MemoryStream(, [byte[]]$logoBytes)
-    $script:logoImage = [System.Drawing.Image]::FromStream($logoStream)
-} catch { }
 
-$script:remoteVersion   = $null
-$script:githubScriptUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/EOO-WinInstall-GUI.ps1'
+    $msWpf = New-Object System.IO.MemoryStream(, [byte[]]$logoBytes)
+    $bmpWpf = New-Object System.Windows.Media.Imaging.BitmapImage
+    $bmpWpf.BeginInit(); $bmpWpf.StreamSource = $msWpf; $bmpWpf.CacheOption = 'OnLoad'; $bmpWpf.EndInit()
+    $imgLogo.Source = $bmpWpf
 
-# ── Layout constanten ─────────────────────────────────────────────
-$HDR_H       = 110   # header hoogte
-$INFO_ROW_H  = 26    # hoogte per info-rij
-$INFO_ROWS   = 9     # aantal info-rijen (automatisch meerekenen bij toevoegen)
-$INFO_PAD_T  = 12    # top-marge binnenin info panel
-$INFO_PAD_B  = 48    # onderste marge (ruimte voor vernieuw-knop)
-$INFO_W      = 420   # breedte infopanel en knoppen (relatief aan scrollpanel)
-$INFO_Y      = 14    # Y-positie in scrollpanel (paneel-relatief)
-$INFO_H      = $INFO_PAD_T + ($INFO_ROWS * $INFO_ROW_H) + $INFO_PAD_B
-$INFO_BOTTOM = $INFO_Y + $INFO_H
-$SECT_Y      = $INFO_BOTTOM + 18   # Y-start voor secties onder het info panel
-
-# ── GDI+ icon helpers ────────────────────────────────────────────
-# Teken een vinkje-bitmap (16x16)
-function New-CheckBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen = New-Object System.Drawing.Pen($Color, 2.5)
-    $pts = @(
-        [System.Drawing.Point]::new(2,  8),
-        [System.Drawing.Point]::new(6,  12),
-        [System.Drawing.Point]::new(14, 4)
-    )
-    $g.DrawLines($pen, $pts)
-    $pen.Dispose(); $g.Dispose()
-    return $bmp
+    # Stream bewust NIET disposen: System.Drawing.Image.FromStream blijft de stream gebruiken.
+    $script:logoGdiStream = New-Object System.IO.MemoryStream(, [byte[]]$logoBytes)
+    $script:logoImageGdi  = [System.Drawing.Image]::FromStream($script:logoGdiStream)
+} catch {
+    $imgLogo.Visibility = 'Collapsed'
+    $txtLogoFallback.Visibility = 'Visible'
+    $script:logoImageGdi = $null
 }
 
-# Teken een uitroepteken-bitmap (16x16)
-function New-ExclBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $pen   = New-Object System.Drawing.Pen($Color, 2.5)
-    # Streep
-    $g.DrawLine($pen, 8, 2, 8, 10)
-    # Punt
-    $g.FillEllipse($brush, 6, 12, 4, 4)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
+# ── Console-log helper ─────────────────────────────────────────────
+$brushConsole = @{
+    'ok'      = $window.FindResource('BrushConsoleOk')
+    'error'   = $window.FindResource('BrushConsoleError')
+    'start'   = $window.FindResource('BrushConsoleStart')
+    'default' = $window.FindResource('BrushConsoleDefault')
+}
+function Write-Console {
+    param([string]$Message, [string]$Type = 'default')
+    $brush = if ($brushConsole.ContainsKey($Type)) { $brushConsole[$Type] } else { $brushConsole['default'] }
+    $time  = Get-Date -Format 'HH:mm:ss'
+    $tb = New-Object System.Windows.Controls.TextBlock
+    $tb.Text         = "[$time] $Message"
+    $tb.Foreground   = $brush
+    $tb.TextWrapping = 'Wrap'
+    [void]$lstConsole.Items.Add($tb)
+    $lstConsole.ScrollIntoView($tb)
 }
 
-# Groot rood uitroepteken (24x24) voor info-panel
-function New-BigExclBitmap {
-    $bmp = New-Object System.Drawing.Bitmap(24, 24)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($clrDanger)
-    $pen   = New-Object System.Drawing.Pen($clrDanger, 3)
-    $g.DrawLine($pen, 12, 2, 12, 15)
-    $g.FillEllipse($brush, 9, 18, 6, 6)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
+# ── Easter egg: 5x klikken op het logo -> Raphael knipoogt en verdwijnt ─
+function Show-NinjaTurtleEasterEgg {
+    $turtle = New-Object System.Windows.Controls.TextBlock
+    $turtle.Text = [char]::ConvertFromUtf32(0x1F422)   # 🐢
+    $turtle.FontSize = 54
+    $turtle.HorizontalAlignment = 'Left'
+    $turtle.VerticalAlignment = 'Top'
+    $turtle.Margin = [System.Windows.Thickness]::new(560, 4, 0, 0)
+    $turtle.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
+    $scale = New-Object System.Windows.Media.ScaleTransform(0, 0)
+    $turtle.RenderTransform = $scale
+    [void]$headerGrid.Children.Add($turtle)
 
-# Pijl-bitmap voor actie-knoppen (16x16)
-function New-ArrowBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $pts = [System.Drawing.Point[]]@(
-        [System.Drawing.Point]::new(3,  3),
-        [System.Drawing.Point]::new(13, 8),
-        [System.Drawing.Point]::new(3,  13)
-    )
-    $g.FillPolygon($brush, $pts)
-    $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
+    # Rode hoofdband met wapperend staartje -- het herkenbaarste Raphael-kenmerk
+    # (de emoji zelf is niet herkleurbaar, dus deze accessoires worden los overlayd)
+    $raphRed = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xE3, 0x24, 0x2B))
 
-# Download pijl (16x16)
-function New-DownArrowBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $pen   = New-Object System.Drawing.Pen($Color, 2)
-    $g.DrawLine($pen, 8, 2, 8, 11)
-    $pts = [System.Drawing.Point[]]@(
-        [System.Drawing.Point]::new(3,  8),
-        [System.Drawing.Point]::new(13, 8),
-        [System.Drawing.Point]::new(8,  14)
-    )
-    $g.FillPolygon($brush, $pts)
-    $brush.Dispose(); $pen.Dispose(); $g.Dispose()
-    return $bmp
-}
+    $bandana = New-Object System.Windows.Controls.Border
+    $bandana.Width = 24; $bandana.Height = 8
+    $bandana.CornerRadius = [System.Windows.CornerRadius]::new(3)
+    $bandana.Background = $raphRed
+    $bandana.HorizontalAlignment = 'Left'
+    $bandana.VerticalAlignment = 'Top'
+    $bandana.Margin = [System.Windows.Thickness]::new(564, 8, 0, 0)
+    $bandana.RenderTransform = New-Object System.Windows.Media.RotateTransform(-8)
+    $bandana.Opacity = 0
+    [void]$headerGrid.Children.Add($bandana)
 
-# Refresh cirkel (16x16) – gebruikt voor de Vernieuwen-knop in het infopanel
-function New-RefreshBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen = New-Object System.Drawing.Pen($Color, 2)
-    $g.DrawArc($pen, 2, 2, 12, 12, -30, 270)
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $pts = [System.Drawing.Point[]]@(
-        [System.Drawing.Point]::new(10, 1),
-        [System.Drawing.Point]::new(15, 5),
-        [System.Drawing.Point]::new(10, 5)
-    )
-    $g.FillPolygon($brush, $pts)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
+    $bandanaTail = New-Object System.Windows.Controls.Border
+    $bandanaTail.Width = 4; $bandanaTail.Height = 15
+    $bandanaTail.CornerRadius = [System.Windows.CornerRadius]::new(2)
+    $bandanaTail.Background = $raphRed
+    $bandanaTail.HorizontalAlignment = 'Left'
+    $bandanaTail.VerticalAlignment = 'Top'
+    $bandanaTail.Margin = [System.Windows.Thickness]::new(586, 10, 0, 0)
+    $bandanaTail.RenderTransform = New-Object System.Windows.Media.RotateTransform(35)
+    $bandanaTail.Opacity = 0
+    [void]$headerGrid.Children.Add($bandanaTail)
 
-# Restart icoon (16x16) – grote clockwise circulaire pijl ↻
-function New-RestartBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen   = New-Object System.Drawing.Pen($Color, 2)
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    # Arc van 40° (rechtsonder) clockwise 285° → eindigt bij ~325° (rechtsboven)
-    $g.DrawArc($pen, 2, 2, 11, 11, 40, 285)
-    # Pijlpunt bij einde arc (rechtsboven), richting wijzend naar beneden (= clockwise)
-    $pts = [System.Drawing.Point[]]@(
-        [System.Drawing.Point]::new(14, 7),   # tip
-        [System.Drawing.Point]::new(14, 3),   # basis boven
-        [System.Drawing.Point]::new(10, 5)    # basis links
-    )
-    $g.FillPolygon($brush, $pts)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
+    # Ceintuurgesp-'R' (donker met gouden randje), lager op het lijf -- zoals op de referentiefoto
+    $badge = New-Object System.Windows.Controls.Border
+    $badge.Width = 20; $badge.Height = 20
+    $badge.CornerRadius = [System.Windows.CornerRadius]::new(10)
+    $badge.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0x3E, 0x27, 0x23))
+    $badge.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xC9, 0xA2, 0x27))
+    $badge.BorderThickness = [System.Windows.Thickness]::new(1.5)
+    $badge.HorizontalAlignment = 'Left'
+    $badge.VerticalAlignment = 'Top'
+    $badge.Margin = [System.Windows.Thickness]::new(596, 40, 0, 0)
+    $badge.Opacity = 0
+    $badgeLbl = New-Object System.Windows.Controls.TextBlock
+    $badgeLbl.Text = 'R'
+    $badgeLbl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xF5, 0xE6, 0xC8))
+    $badgeLbl.FontWeight = 'Bold'
+    $badgeLbl.FontSize = 11
+    $badgeLbl.HorizontalAlignment = 'Center'
+    $badgeLbl.VerticalAlignment = 'Center'
+    $badge.Child = $badgeLbl
+    [void]$headerGrid.Children.Add($badge)
 
-# Shutdown / power knop (16x16) – klassiek ⏻ symbool met opening BOVEN
-function New-PowerBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen = New-Object System.Drawing.Pen($Color, 2)
-    # Arc met 60° opening boven (van 300° clockwise 300°, gap tussen 240° en 300° = bovenkant)
-    $g.DrawArc($pen, 3, 3, 10, 10, 300, 300)
-    # Verticale lijn van boven-rand cirkel omhoog, door de opening
-    $g.DrawLine($pen, 8, 1, 8, 8)
-    $pen.Dispose(); $g.Dispose()
-    return $bmp
-}
+    $wink = New-Object System.Windows.Controls.TextBlock
+    $wink.Text = [char]::ConvertFromUtf32(0x1F609)     # 😉
+    $wink.FontSize = 22
+    $wink.HorizontalAlignment = 'Left'
+    $wink.VerticalAlignment = 'Top'
+    $wink.Margin = [System.Windows.Thickness]::new(606, 12, 0, 0)
+    $wink.Opacity = 0
+    [void]$headerGrid.Children.Add($wink)
 
-# Settings tandwiel (16x16)
-function New-GearBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen   = New-Object System.Drawing.Pen($Color, 1.5)
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $g.DrawEllipse($pen, 5, 5, 6, 6)
-    for ($i = 0; $i -lt 8; $i++) {
-        $angle = $i * 45 * [Math]::PI / 180
-        $x1 = 8 + 5 * [Math]::Cos($angle) - 1
-        $y1 = 8 + 5 * [Math]::Sin($angle) - 1
-        $g.FillRectangle($brush, $x1, $y1, 2, 2)
+    # Pop-in van de schildpad
+    $pop = New-Object System.Windows.Media.Animation.DoubleAnimation(0, 1, (New-Object System.Windows.Duration([TimeSpan]::FromMilliseconds(350))))
+    $pop.EasingFunction = New-Object System.Windows.Media.Animation.BackEase
+    $pop.EasingFunction.EasingMode = 'EaseOut'
+    $scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $pop)
+    $scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $pop.Clone())
+
+    # Bandana, staartje en gesp verschijnen vlak na de schildpad
+    $badgeIn = New-Object System.Windows.Media.Animation.DoubleAnimation(0, 1, (New-Object System.Windows.Duration([TimeSpan]::FromMilliseconds(200))))
+    $badgeIn.BeginTime = [TimeSpan]::FromMilliseconds(250)
+    $bandana.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $badgeIn.Clone())
+    $bandanaTail.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $badgeIn.Clone())
+    $badge.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $badgeIn)
+
+    # Knipoog: één animatie met keyframes (kort zichtbaar tussen 500-800ms), i.p.v. losse timers
+    $winkAnim = New-Object System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
+    foreach ($kf in @(@{ V = 0; T = 0 }, @{ V = 1; T = 500 }, @{ V = 1; T = 750 }, @{ V = 0; T = 800 })) {
+        [void]$winkAnim.KeyFrames.Add((New-Object System.Windows.Media.Animation.DiscreteDoubleKeyFrame($kf.V, [System.Windows.Media.Animation.KeyTime]::FromTimeSpan([TimeSpan]::FromMilliseconds($kf.T)))))
     }
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
+    $wink.BeginAnimation([System.Windows.Controls.TextBlock]::OpacityProperty, $winkAnim)
+
+    # Na 1,4s alles laten vervagen en daarna opruimen
+    $exit = New-Object System.Windows.Media.Animation.DoubleAnimation(1, 0, (New-Object System.Windows.Duration([TimeSpan]::FromMilliseconds(400))))
+    $exit.BeginTime = [TimeSpan]::FromMilliseconds(1400)
+    $exit.Add_Completed({
+        $headerGrid.Children.Remove($turtle)
+        $headerGrid.Children.Remove($bandana)
+        $headerGrid.Children.Remove($bandanaTail)
+        $headerGrid.Children.Remove($badge)
+        $headerGrid.Children.Remove($wink)
+    }.GetNewClosure())
+    $turtle.BeginAnimation([System.Windows.Controls.TextBlock]::OpacityProperty, $exit)
+    $bandana.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $exit.Clone())
+    $bandanaTail.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $exit.Clone())
+    $badge.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $exit.Clone())
+
+    Write-Console "Easter egg gevonden: Raphael knipoogt en verdwijnt weer. $([char]::ConvertFromUtf32(0x1F422))" 'ok'
 }
 
-# Windows logo (16x16)
-function New-WindowsBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $g.FillRectangle($brush, 2,  2,  6, 6)
-    $g.FillRectangle($brush, 9,  2,  5, 6)
-    $g.FillRectangle($brush, 2,  9,  6, 5)
-    $g.FillRectangle($brush, 9,  9,  5, 5)
-    $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
-
-# WiFi signaal (16x16)
-function New-WifiBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen   = New-Object System.Drawing.Pen($Color, 1.5)
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $g.DrawArc($pen, 1,  2, 14, 14, 210, 120)
-    $g.DrawArc($pen, 4,  5,  8,  8, 210, 120)
-    $g.DrawArc($pen, 7,  8,  2,  2, 210, 120)
-    $g.FillEllipse($brush, 7, 13, 2, 2)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
-
-# Sleutel (16x16) voor activatie
-function New-KeyBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $pen   = New-Object System.Drawing.Pen($Color, 1.5)
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $g.DrawEllipse($pen, 2, 2, 7, 7)
-    $pts = [System.Drawing.Point[]]@(
-        [System.Drawing.Point]::new(8, 9),
-        [System.Drawing.Point]::new(14, 14),
-        [System.Drawing.Point]::new(12, 14),
-        [System.Drawing.Point]::new(10, 12)
-    )
-    $g.DrawLines($pen, $pts)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
-
-# Duimpje omhoog (24x24) voor alles-OK status
-function New-ThumbBitmap {
-    $bmp = New-Object System.Drawing.Bitmap(24, 24)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($clrAccent)
-    $pen   = New-Object System.Drawing.Pen($clrAccent, 1.5)
-    # Duim omhoog (vereenvoudigd): handpalm + duim
-    # Handpalm
-    $g.FillRectangle($brush, 6, 11, 12, 10)
-    # Duim
-    $thumbPts = [System.Drawing.Point[]]@(
-        [System.Drawing.Point]::new(6,  11),
-        [System.Drawing.Point]::new(6,  7),
-        [System.Drawing.Point]::new(9,  3),
-        [System.Drawing.Point]::new(12, 5),
-        [System.Drawing.Point]::new(11, 11)
-    )
-    $g.FillPolygon($brush, $thumbPts)
-    # Vingers (lijntjes)
-    $g.DrawLine($pen, 9,  12, 9,  20)
-    $g.DrawLine($pen, 12, 12, 12, 20)
-    $g.DrawLine($pen, 15, 12, 15, 20)
-    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
-
-
-# Cloud/opslag (16x16) voor Azure schijfkoppeling
-function New-CloudBitmap {
-    param([System.Drawing.Color]$Color)
-    $bmp = New-Object System.Drawing.Bitmap(16, 16)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($Color)
-    $g.FillEllipse($brush, 1,  7, 6, 6)
-    $g.FillEllipse($brush, 8,  8, 6, 5)
-    $g.FillEllipse($brush, 4,  4, 8, 8)
-    $rect = New-Object System.Drawing.Rectangle(2, 10, 12, 3)
-    $g.FillRectangle($brush, $rect)
-    $brush.Dispose(); $g.Dispose()
-    return $bmp
-}
-
-function New-IconBox {
-    param([System.Drawing.Bitmap]$Bmp, [int]$X, [int]$Y, [int]$Size = 16)
-    $pb = New-Object System.Windows.Forms.PictureBox
-    $pb.Image    = $Bmp
-    $pb.Size     = New-Object System.Drawing.Size($Size, $Size)
-    $pb.Location = New-Object System.Drawing.Point($X, $Y)
-    $pb.SizeMode = 'StretchImage'
-    $pb.BackColor= [System.Drawing.Color]::Transparent
-    return $pb
-}
-
-# Geeft een knop een moderne teal-gradient achtergrond (i.p.v. effen kleur), via
-# BackgroundImage zodat de standaard knoptekst/-icoon gewoon boven de gradient blijft staan.
-function Set-ButtonGradient {
-    param($Btn, [System.Drawing.Color]$ColorA, [System.Drawing.Color]$ColorB)
-    $Btn.FlatStyle = 'Flat'
-    $Btn.FlatAppearance.BorderSize = 0
-    $Btn.ForeColor = [System.Drawing.Color]::White
-
-    $redraw = {
-        if ($Btn.Width -le 0 -or $Btn.Height -le 0) { return }
-        $bmp   = New-Object System.Drawing.Bitmap($Btn.Width, $Btn.Height)
-        $g     = [System.Drawing.Graphics]::FromImage($bmp)
-        $rect  = New-Object System.Drawing.Rectangle(0, 0, $bmp.Width, $bmp.Height)
-        $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $ColorA, $ColorB, [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal)
-        $g.FillRectangle($brush, $rect)
-        $brush.Dispose(); $g.Dispose()
-        if ($Btn.BackgroundImage) { $Btn.BackgroundImage.Dispose() }
-        $Btn.BackgroundImage       = $bmp
-        $Btn.BackgroundImageLayout = 'Stretch'
+$script:logoClickCount = 0
+$logoClickHandler = {
+    $script:logoClickCount++
+    if ($script:logoClickCount -ge 5) {
+        $script:logoClickCount = 0
+        Show-NinjaTurtleEasterEgg
     }
-    $redraw = $redraw.GetNewClosure()
-    & $redraw
-    $Btn.Add_Resize($redraw)
-    $Btn.Add_MouseEnter({ $this.ForeColor = [System.Drawing.Color]::White })
-    $Btn.Add_MouseLeave({ $this.ForeColor = [System.Drawing.Color]::White })
 }
+$imgLogo.Add_MouseLeftButtonUp($logoClickHandler)
+$txtLogoFallback.Add_MouseLeftButtonUp($logoClickHandler)
 
-# ── Form ─────────────────────────────────────────────────────────
-$form = New-Object System.Windows.Forms.Form
-$form.Text            = 'EOO - Windows Installatie Tool'
-$form.Size            = New-Object System.Drawing.Size(980, 720)
-$form.MinimumSize     = New-Object System.Drawing.Size(640, 500)
-$form.StartPosition   = 'CenterScreen'
-$form.BackColor       = $clrBg
-$form.ForeColor       = $clrAccentDim
-$form.FormBorderStyle = 'Sizable'
-$form.MaximizeBox     = $true
-$form.Font            = $fntLabel
+# ── Herbruikbare achtergrondtaak-helper (Start-Job + DispatcherTimer) ─
+# Jobs/timers staan in $script:eooJobs zodat de Tick-handler ze altijd
+# via scriptscope opnieuw opzoekt (lokale closures over WinForms/WPF
+# Timer-events zijn onbetrouwbaar gebleken bij eerdere EOO-tools).
+$script:eooJobs = @{}
+function Start-EOOJob {
+    param(
+        [string]$Key,
+        [scriptblock]$ScriptBlock,
+        [object[]]$ArgumentList = @(),
+        [scriptblock]$OnOutput,
+        [scriptblock]$OnError,
+        [scriptblock]$OnComplete
+    )
+    $script:eooJobs[$Key] = @{ Job = (Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList) }
 
-# ── Header ───────────────────────────────────────────────────────
-$pnlHeader = New-Object System.Windows.Forms.Panel
-$pnlHeader.Location  = New-Object System.Drawing.Point(0, 0)
-$pnlHeader.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, $HDR_H)
-$pnlHeader.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlHeader.BackColor = $clrAccentDark
-$pnlHeader.add_Paint(({
-    param($s, $e)
-    $g    = $e.Graphics
-    $rect = [System.Drawing.Rectangle]::new(0, 0, [Math]::Max(1, $pnlHeader.Width), $pnlHeader.Height)
-    $mode = [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal
-    $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $clrAccent, $clrAccentDark, $mode)
-    $g.FillRectangle($brush, $rect)
-    $brush.Dispose()
-}).GetNewClosure())
-$form.Controls.Add($pnlHeader)
-
-# Dunne moderne accentlijn onder de header
-$pnlAccentBar = New-Object System.Windows.Forms.Panel
-$pnlAccentBar.Location  = New-Object System.Drawing.Point(0, ($HDR_H - 3))
-$pnlAccentBar.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, 3)
-$pnlAccentBar.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlAccentBar.BackColor = $clrAccent
-$pnlHeader.Controls.Add($pnlAccentBar)
-
-# Logo PictureBox
-$pbHeaderLogo = New-Object System.Windows.Forms.PictureBox
-$pbHeaderLogo.SizeMode  = 'Zoom'
-$pbHeaderLogo.BackColor = [System.Drawing.Color]::Transparent
-$pbHeaderLogo.Location  = New-Object System.Drawing.Point(14, 5)
-$pbHeaderLogo.Size      = New-Object System.Drawing.Size(230, 98)
-if ($script:logoImage) {
-    $pbHeaderLogo.Image = $script:logoImage
-} else {
-    $lblTitle = New-Object System.Windows.Forms.Label
-    $lblTitle.Text      = 'EOO'
-    $lblTitle.Font      = $fntTitle
-    $lblTitle.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
-    $lblTitle.BackColor = [System.Drawing.Color]::Transparent
-    $lblTitle.Location  = New-Object System.Drawing.Point(20, 24)
-    $lblTitle.AutoSize  = $true
-    $pnlHeader.Controls.Add($lblTitle)
-}
-$pnlHeader.Controls.Add($pbHeaderLogo)
-
-$lblSubTitle = New-Object System.Windows.Forms.Label
-$lblSubTitle.Text      = 'Windows Installatie Tool'
-$lblSubTitle.Font      = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Regular)
-$lblSubTitle.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
-$lblSubTitle.BackColor = [System.Drawing.Color]::Transparent
-$lblSubTitle.Location  = New-Object System.Drawing.Point(252, 50)
-$lblSubTitle.AutoSize  = $true
-$pnlHeader.Controls.Add($lblSubTitle)
-
-$lblVersion = New-Object System.Windows.Forms.Label
-$lblVersion.Text      = "v$script:currentVersion - $script:versionName"
-$lblVersion.Font      = $fntSub
-$lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(203, 213, 225)
-$lblVersion.BackColor = [System.Drawing.Color]::Transparent
-$lblVersion.Location  = New-Object System.Drawing.Point(780, 88)
-$lblVersion.AutoSize  = $true
-$lblVersion.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlHeader.Controls.Add($lblVersion)
-
-$script:btnUpdate = New-Object System.Windows.Forms.Button
-$script:btnUpdate.Text      = 'Update beschikbaar'
-$script:btnUpdate.Font      = $fntSub
-$script:btnUpdate.Location  = New-Object System.Drawing.Point(760, 58)
-$script:btnUpdate.Size      = New-Object System.Drawing.Size(162, 24)
-$script:btnUpdate.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-$script:btnUpdate.Cursor    = [System.Windows.Forms.Cursors]::Hand
-$script:btnUpdate.TextAlign = 'MiddleCenter'
-$script:btnUpdate.Visible   = $false
-Set-ButtonGradient $script:btnUpdate $clrAccent $clrAccentDark
-$script:btnUpdate.Add_Click({
-    $script:btnUpdate.Enabled = $false
-    $script:btnUpdate.Text    = 'Bezig...'
-    try {
-        $raw      = (Invoke-WebRequest -Uri $script:githubScriptUrl -UseBasicParsing).Content
-        $encoding = New-Object System.Text.UTF8Encoding($true)
-        [System.IO.File]::WriteAllText($PSCommandPath, $raw, $encoding)
-        $keuze = [System.Windows.Forms.MessageBox]::Show(
-            "Script bijgewerkt naar v$script:remoteVersion.`nNu herstarten?",
-            'Update geslaagd',
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        )
-        if ($keuze -eq [System.Windows.Forms.DialogResult]::Yes) {
-            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs
-            $form.Close()
-        } else {
-            $script:btnUpdate.Text    = 'Herstart vereist'
-            $script:btnUpdate.Enabled = $true
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(500)
+    $timer.Add_Tick({
+        $job = $script:eooJobs[$Key].Job
+        foreach ($line in ($job.ChildJobs[0].Output.ReadAll())) { & $OnOutput $line }
+        foreach ($e in ($job.ChildJobs[0].Error.ReadAll())) { if ($OnError) { & $OnError $e } }
+        if ($job.State -in 'Completed', 'Failed') {
+            $timer.Stop()
+            $succeeded = $job.State -eq 'Completed'
+            $reason = if (-not $succeeded) { $job.ChildJobs[0].JobStateInfo.Reason.Message } else { $null }
+            Remove-Job $job -Force
+            $script:eooJobs.Remove($Key)
+            if ($OnComplete) { & $OnComplete $succeeded $reason }
         }
-    } catch {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Update mislukt:`n$_",
-            'Fout',
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Error
-        )
-        $script:btnUpdate.Text    = 'Update beschikbaar'
-        $script:btnUpdate.Enabled = $true
-    }
-})
-$pnlHeader.Controls.Add($script:btnUpdate)
-
-# ── Googly eyes die de muiscursor volgen ──────────────────────────
-function New-GooglyEye {
-    param([System.Windows.Forms.Control]$Parent, [int]$X, [int]$Y, [int]$Size = 36, [int]$PupilRadius = 5)
-    $eye = New-Object System.Windows.Forms.PictureBox
-    $eye.Size      = New-Object System.Drawing.Size($Size, $Size)
-    $eye.Location  = New-Object System.Drawing.Point($X, $Y)
-    $eye.BackColor = [System.Drawing.Color]::Transparent
-    $eye.Tag       = @{ DX = 0.0; DY = 0.0; PupilR = $PupilRadius }
-    $eye.add_Paint({
-        param($s, $e)
-        $g = $e.Graphics
-        $g.SmoothingMode = 'AntiAlias'
-        $w = $s.Width
-        $h = $s.Height
-        $eyeRect = New-Object System.Drawing.Rectangle(2, 2, ($w - 4), ($h - 4))
-        $g.FillEllipse([System.Drawing.Brushes]::White, $eyeRect)
-        $penBlack = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 2)
-        $g.DrawEllipse($penBlack, $eyeRect)
-        $state = $s.Tag
-        $r  = $state.PupilR
-        $cx = $w / 2.0
-        $cy = $h / 2.0
-        $px = $cx + $state.DX - $r
-        $py = $cy + $state.DY - $r
-        $g.FillEllipse([System.Drawing.Brushes]::Black, $px, $py, ($r * 2), ($r * 2))
-        $penBlack.Dispose()
-    })
-    $Parent.Controls.Add($eye)
-    return $eye
+    }.GetNewClosure())
+    $script:eooJobs[$Key].Timer = $timer
+    $timer.Start()
 }
 
-$script:googlyEyes = [System.Collections.Generic.List[System.Windows.Forms.PictureBox]]::new()
-$script:googlyEyes.Add((New-GooglyEye -Parent $pnlHeader -X 266 -Y 8 -Size 36))
-$script:googlyEyes.Add((New-GooglyEye -Parent $pnlHeader -X 310 -Y 8 -Size 36))
-
-$script:timerEye = New-Object System.Windows.Forms.Timer
-$script:timerEye.Interval = 30
-$script:timerEye.Add_Tick({
-    $cursor = [System.Windows.Forms.Cursor]::Position
-    foreach ($eye in $script:googlyEyes) {
-        if (-not $eye.IsHandleCreated) { continue }
-        $centerPt = New-Object System.Drawing.Point(([int]($eye.Width / 2)), ([int]($eye.Height / 2)))
-        $center   = $eye.PointToScreen($centerPt)
-        $dx = $cursor.X - $center.X
-        $dy = $cursor.Y - $center.Y
-        $dist = [Math]::Sqrt($dx * $dx + $dy * $dy)
-        $maxOffset = ($eye.Width / 2.0) - $eye.Tag.PupilR - 4
-        if ($dist -gt 0) {
-            $scale = [Math]::Min($dist, $maxOffset) / $dist
-            $eye.Tag.DX = $dx * $scale
-            $eye.Tag.DY = $dy * $scale
-        } else {
-            $eye.Tag.DX = 0.0
-            $eye.Tag.DY = 0.0
-        }
-        $eye.Invalidate()
-    }
-})
-$script:timerEye.Start()
-
-# ── Footer (alvast aanmaken, inhoud komt verderop) ────────────────
-$FTR_H = 30
-$pnlFooter = New-Object System.Windows.Forms.Panel
-$pnlFooter.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, $FTR_H)
-$pnlFooter.Location  = New-Object System.Drawing.Point(0, ($form.ClientSize.Height - $FTR_H))
-$pnlFooter.Anchor    = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlFooter.BackColor = $clrCard
-$form.Controls.Add($pnlFooter)
-
-# ── SplitContainer: linker scrollpanel | rechter consolepanel ────
-$splitMain = New-Object System.Windows.Forms.SplitContainer
-$splitMain.Location     = New-Object System.Drawing.Point(0, $HDR_H)
-$splitMain.Size         = New-Object System.Drawing.Size($form.ClientSize.Width, ($form.ClientSize.Height - $HDR_H - $FTR_H))
-$splitMain.Anchor       = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$splitMain.Orientation  = 'Vertical'
-$splitMain.SplitterWidth = 3
-$splitMain.Panel1MinSize = 420
-$splitMain.Panel2MinSize = 200
-$splitMain.BackColor     = [System.Drawing.Color]::FromArgb(128, 128, 128)
-$splitMain.Panel1.BackColor = $clrBg
-$splitMain.Panel2.BackColor = $clrAccentDark
-$form.Controls.Add($splitMain)
-
-# SplitterDistance pas instellen nadat het form getoond is (juiste breedte)
-$form.Add_Shown({
-    $splitMain.SplitterDistance = [int]($splitMain.Width * 0.50)
-    Invoke-LayoutResize
-    Start-VersionCheck
-})
-
-$pnlLeftScroll = New-Object System.Windows.Forms.Panel
-$pnlLeftScroll.AutoScroll = $true
-$pnlLeftScroll.BackColor  = $clrBg
-$pnlLeftScroll.Dock       = 'Fill'
-$splitMain.Panel1.Controls.Add($pnlLeftScroll)
-$script:leftPanel = $pnlLeftScroll
-
-# ── Responsive layout helpers ────────────────────────────────────
-$script:fullWidthCtrls  = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
-$script:sectionDividers = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
-
-function Invoke-LayoutResize {
-    $avail = $script:leftPanel.ClientSize.Width
-    if ($avail -le 0) { return }
-    $margin = 22
-    $innerW = [Math]::Max(360, $avail - $margin * 2)
-    foreach ($ctrl in $script:fullWidthCtrls)  { $ctrl.Width = $innerW }
-    foreach ($ctrl in $script:sectionDividers) { $ctrl.Width = $innerW }
-    $halfW = [int](($innerW - 4) / 2)
-    if ($script:btnRestart)  { $script:btnRestart.Width  = $halfW }
-    if ($script:btnShutdown) {
-        $script:btnShutdown.Width = $halfW
-        $script:btnShutdown.Left  = $margin + $halfW + 4
-    }
-}
-$script:leftPanel.Add_Resize({ Invoke-LayoutResize })
-
-# ── Info panel ───────────────────────────────────────────────────
-$pnlInfo = New-Object System.Windows.Forms.Panel
-$pnlInfo.Size      = New-Object System.Drawing.Size($INFO_W, $INFO_H)
-$pnlInfo.Location  = New-Object System.Drawing.Point(22, $INFO_Y)
-$pnlInfo.BackColor = $clrCard
-$pnlInfo.add_Paint(({
-    param($s, $e)
-    $g = $e.Graphics
-    $w = [int]$pnlInfo.Width - 1
-    $h = [int]$pnlInfo.Height - 1
-    # Moderne flat kaart: dunne subtiele rand rondom
-    $penBorder = New-Object System.Drawing.Pen($clrBorder, 1)
-    $g.DrawRectangle($penBorder, 0, 0, $w, $h)
-    $penBorder.Dispose()
-}).GetNewClosure())
-$script:leftPanel.Controls.Add($pnlInfo)
-$script:fullWidthCtrls.Add($pnlInfo)
-
-# Info rij: status-icoon (PictureBox) + tekst label
+# ── Infopanel: rij-helper ──────────────────────────────────────────
+$script:infoRowMap = @{}
 function New-InfoRow {
-    param($Panel, [int]$Y)
-    $pb = New-Object System.Windows.Forms.PictureBox
-    $pb.Size     = New-Object System.Drawing.Size(16, 16)
-    $pb.Location = New-Object System.Drawing.Point(10, ($Y + 3))
-    $pb.SizeMode = 'StretchImage'
-    $pb.BackColor= [System.Drawing.Color]::Transparent
-    $Panel.Controls.Add($pb)
+    param([string]$Key)
+    $row = New-Object System.Windows.Controls.StackPanel
+    $row.Orientation = 'Horizontal'
+    $row.Margin = '0,0,0,7'
 
-    $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Font      = $fntLabel
-    $lbl.ForeColor = $clrSubText
-    $lbl.Location  = New-Object System.Drawing.Point(32, $Y)
-    $lbl.Size      = New-Object System.Drawing.Size(320, 22)
-    $Panel.Controls.Add($lbl)
-    return @{ Icon = $pb; Label = $lbl }
+    $icon = New-Object System.Windows.Controls.TextBlock
+    $icon.Width = 20
+    $icon.FontWeight = 'Bold'
+    $icon.FontSize = 13
+    $icon.Foreground = $window.FindResource('BrushAccent')
+    $icon.Text = '-'
+
+    $label = New-Object System.Windows.Controls.TextBlock
+    $label.Foreground = $window.FindResource('BrushSubText')
+    $label.FontSize = 12
+    $label.VerticalAlignment = 'Center'
+    $label.TextWrapping = 'Wrap'
+
+    [void]$row.Children.Add($icon)
+    [void]$row.Children.Add($label)
+    [void]$infoRows.Children.Add($row)
+    $script:infoRowMap[$Key] = @{ Icon = $icon; Label = $label }
+}
+'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
+    ForEach-Object { New-InfoRow $_ }
+
+function Set-InfoRow {
+    param([string]$Key, [string]$Text, [bool]$OK, [switch]$Neutral)
+    $row = $script:infoRowMap[$Key]
+    $row.Label.Text = $Text
+    if ($Neutral -or $OK) {
+        $row.Icon.Text = [char]0x2713
+        $row.Icon.Foreground = $window.FindResource('BrushAccent')
+    } else {
+        $row.Icon.Text = '!'
+        $row.Icon.Foreground = $window.FindResource('BrushDanger')
+    }
 }
 
-$rowY      = 0..($INFO_ROWS - 1) | ForEach-Object { $INFO_PAD_T + $_ * $INFO_ROW_H }
-$rowWin    = New-InfoRow $pnlInfo $rowY[0]
-$rowAct    = New-InfoRow $pnlInfo $rowY[1]
-$rowTpm    = New-InfoRow $pnlInfo $rowY[2]
-$rowBoot   = New-InfoRow $pnlInfo $rowY[3]
-$rowNet    = New-InfoRow $pnlInfo $rowY[4]
-$rowHP     = New-InfoRow $pnlInfo $rowY[5]
-$rowLaptop = New-InfoRow $pnlInfo $rowY[6]
-$rowWifi   = New-InfoRow $pnlInfo $rowY[7]
-$rowSerial = New-InfoRow $pnlInfo $rowY[8]
+# ── Systeemchecks (zelfde logica als WinForms v6) ──────────────────
+$script:okActivation = $false; $script:okTpm = $false; $script:okSecureBoot = $false
+$script:okInternet   = $false; $script:okWifi = $false; $script:hpBloatFound = @()
 
-# Overall status label – groot symbool rechts in het info panel
-$lblStatus = New-Object System.Windows.Forms.Label
-$lblStatus.Font      = New-Object System.Drawing.Font("Segoe UI Emoji", 36, [System.Drawing.FontStyle]::Regular)
-$lblStatus.Location  = New-Object System.Drawing.Point(338, 10)
-$lblStatus.Size      = New-Object System.Drawing.Size(75, 150)
-$lblStatus.TextAlign = 'MiddleCenter'
-$lblStatus.BackColor = [System.Drawing.Color]::Transparent
-$lblStatus.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-$lblStatus.Text      = ''
-$pnlInfo.Controls.Add($lblStatus)
+function Update-InfoPanel {
+    try {
+        $osInfo = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+        $pn = $osInfo.ProductName; $dv = $osInfo.DisplayVersion; $bn = [int]$osInfo.CurrentBuildNumber
+        if ($bn -ge 22000) { $pn = $pn -replace '10', '11' }
+        Set-InfoRow 'Windows' "$pn $dv (Build $bn)" $true -Neutral
+    } catch { Set-InfoRow 'Windows' 'Windows-versie onbekend' $false }
 
-# ── Easter egg: 6x klik op 👍 → 👌 ──────────────────────────────
-$script:eggThumbClicks = 0
-$script:eggThumbActive = $false
-$lblStatus.Cursor = [System.Windows.Forms.Cursors]::Hand
-$lblStatus.Add_Click({
-    if ($lblStatus.Text -ne [System.Char]::ConvertFromUtf32(0x1F44D)) { return }
-    $script:eggThumbClicks++
-    if ($script:eggThumbClicks -ge 6) {
-        $script:eggThumbClicks = 0
-        $script:eggThumbActive = $true
-        $lblStatus.Text      = [System.Char]::ConvertFromUtf32(0x1F44C)
-        $lblStatus.ForeColor = $clrAccent
-        $script:timerEgg = New-Object System.Windows.Forms.Timer
-        $script:timerEgg.Interval = 3000
-        $script:timerEgg.Add_Tick({
-            $script:eggThumbActive = $false
-            Display-AllGoodThumb
-            $script:timerEgg.Stop()
-            $script:timerEgg.Dispose()
-        })
-        $script:timerEgg.Start()
+    try {
+        $lic = Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE PartialProductKey IS NOT NULL AND LicenseStatus=1"
+        $script:okActivation = [bool]$lic
+        Set-InfoRow 'Activatie' $(if ($lic) { 'Geactiveerd' } else { 'Niet geactiveerd' }) $script:okActivation
+    } catch { $script:okActivation = $false; Set-InfoRow 'Activatie' 'Activatie: controlefout' $false }
+
+    try {
+        $tpm = Get-CimInstance -Namespace 'Root\CIMv2\Security\MicrosoftTpm' -ClassName Win32_Tpm -ErrorAction Stop
+        $script:okTpm = [bool]$tpm
+        $tekst = if ($tpm -and $tpm.SpecVersion) { "TPM aanwezig (versie $($tpm.SpecVersion))" } elseif ($tpm) { 'TPM aanwezig (versie onbekend)' } else { 'Geen TPM gevonden' }
+        Set-InfoRow 'Tpm' $tekst $script:okTpm
+    } catch { $script:okTpm = $false; Set-InfoRow 'Tpm' 'Geen TPM gevonden' $false }
+
+    try {
+        if (Get-Command -Name 'Confirm-SecureBootUEFI' -ErrorAction SilentlyContinue) {
+            $script:okSecureBoot = [bool](Confirm-SecureBootUEFI)
+            Set-InfoRow 'SecureBoot' $(if ($script:okSecureBoot) { 'Secure Boot ingeschakeld' } else { 'Secure Boot uitgeschakeld' }) $script:okSecureBoot
+        } else {
+            $script:okSecureBoot = $false
+            Set-InfoRow 'SecureBoot' 'Secure Boot: niet ondersteund op dit platform' $false
+        }
+    } catch { $script:okSecureBoot = $false; Set-InfoRow 'SecureBoot' 'Secure Boot: geen UEFI systeem' $false }
+
+    $script:okInternet = [bool](Test-Connection -ComputerName 'google.nl' -Count 1 -Quiet -ErrorAction SilentlyContinue)
+    Set-InfoRow 'Internet' $(if ($script:okInternet) { 'Internetverbinding aanwezig' } else { 'Geen internetverbinding' }) $script:okInternet
+
+    $hpBloatNames = @(
+        'HP Wolf Security', 'HP Wolf Security Application Support for Chrome', 'HP Wolf Security Application Support for Windows',
+        'HP Sure Click', 'HP Sure Sense', 'HP Sure Connect', 'HP Sure Start', 'HP Sure View', 'HP Support Assistant',
+        'HP Jumpstart', 'HP Instant Ink', 'HP Audio Switch', 'HP Documentation', 'HP Notifications',
+        'HP PC Hardware Diagnostics', 'HP Privacy Settings', 'HP Smart', 'myHP', 'Poly Lens', 'HP LAN/WLAN Management'
+    )
+    $regPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    $found = @()
+    Get-ItemProperty $regPaths -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName } | ForEach-Object {
+        foreach ($bloat in $hpBloatNames) { if ($_.DisplayName -like "*$bloat*") { $found += $_.DisplayName; break } }
     }
+    try {
+        Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+            Where-Object { $_.Publisher -like '*HP Inc*' -or $_.Publisher -like '*Hewlett*' } |
+            ForEach-Object { $found += $_.Name }
+    } catch {}
+    $script:hpBloatFound = $found
+    Set-InfoRow 'HP' $(if ($found.Count -eq 0) { 'Geen HP bloatware gevonden' } else { "HP bloatware: $($found.Count) app(s) gevonden" }) ($found.Count -eq 0)
+
+    try {
+        $chassis = (Get-CimInstance Win32_SystemEnclosure).ChassisTypes
+        $isLaptop = $chassis | Where-Object { $_ -in 8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32 }
+        Set-InfoRow 'Laptop' "Apparaattype: $(if ($isLaptop) { 'Laptop' } else { 'Desktop' })" $true -Neutral
+    } catch { Set-InfoRow 'Laptop' 'Apparaattype: onbekend' $false }
+
+    try {
+        $wifi = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq '802.11' -or $_.InterfaceDescription -match 'wi.?fi|wireless|802\.11' }
+        $script:okWifi = [bool]$wifi
+        Set-InfoRow 'Wifi' $(if ($wifi) { "WiFi adapter aanwezig: $((($wifi | Select-Object -First 1).InterfaceDescription))" } else { 'Geen WiFi adapter gevonden' }) $script:okWifi
+    } catch { $script:okWifi = $false; Set-InfoRow 'Wifi' 'WiFi adapter: controlefout' $false }
+
+    try {
+        $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
+        if (-not $serial) { $serial = 'ONBEKEND' }
+        Set-InfoRow 'Serienummer' "Serienummer: $serial" $true -Neutral
+    } catch { Set-InfoRow 'Serienummer' 'Serienummer: onbekend' $false }
+
+    if ($script:okActivation -and $script:okTpm -and $script:okSecureBoot -and $script:okInternet) {
+        $txtBigStatus.Text = [char]0x2713
+        $txtBigStatus.Foreground = $window.FindResource('BrushAccent')
+    } else {
+        $txtBigStatus.Text = '!'
+        $txtBigStatus.Foreground = $window.FindResource('BrushDanger')
+    }
+}
+
+$txtRefresh.Add_MouseLeftButtonUp({
+    Update-InfoPanel
+    Write-Console 'Infopaneel vernieuwd.' 'info'
 })
 
-$lblWindowsVersion   = $rowWin.Label
-$lblActivationState  = $rowAct.Label
-$lblTpmStatus        = $rowTpm.Label
-$lblSecureBootStatus = $rowBoot.Label
-
-# ── Knop helper ──────────────────────────────────────────────────
-function New-EOOButton {
-    param([string]$Text, [int]$X, [int]$Y,
-          [int]$W = 420, [int]$H = 28,
-          $BgColor = $null, $HoverBg = $null, $HoverFg = $null)
-    if ($null -eq $BgColor) { $BgColor  = $clrBtnBg }
-    if ($null -eq $HoverBg) { $HoverBg  = $clrBtnHover }
-    if ($null -eq $HoverFg) { $HoverFg  = $clrBtnHoverFg }
-
-    $btn = New-Object System.Windows.Forms.Button
-    $btn.Text      = $Text
-    $btn.Font      = $fntBtn
-    $btn.ForeColor = $clrAccentDim
-    $btn.BackColor = $BgColor
-    $btn.FlatStyle = 'Flat'
-    $btn.FlatAppearance.BorderColor        = $clrBorder
-    $btn.FlatAppearance.BorderSize         = 1
-    $btn.FlatAppearance.MouseOverBackColor = $HoverBg
-    $btn.Location  = New-Object System.Drawing.Point($X, $Y)
-    $btn.Size      = New-Object System.Drawing.Size($W, $H)
-    $btn.Cursor    = [System.Windows.Forms.Cursors]::Hand
-    $btn.TextAlign = 'MiddleLeft'
-    $btn.Padding   = New-Object System.Windows.Forms.Padding(10, 0, 0, 0)
-
-    $capturedFg  = [System.Drawing.Color]::FromArgb($HoverFg.A, $HoverFg.R, $HoverFg.G, $HoverFg.B)
-    $capturedDim = [System.Drawing.Color]::FromArgb($clrAccentDim.A, $clrAccentDim.R, $clrAccentDim.G, $clrAccentDim.B)
-    $btn.Add_MouseEnter([scriptblock]::Create('$this.ForeColor = [System.Drawing.Color]::FromArgb(' + $capturedFg.A + ',' + $capturedFg.R + ',' + $capturedFg.G + ',' + $capturedFg.B + ')'))
-    $btn.Add_MouseLeave([scriptblock]::Create('$this.ForeColor = [System.Drawing.Color]::FromArgb(' + $capturedDim.A + ',' + $capturedDim.R + ',' + $capturedDim.G + ',' + $capturedDim.B + ')'))
-    $script:leftPanel.Controls.Add($btn)
-    return $btn
-}
-
-# Voeg icoon toe aan knop – direct als Button.Image (geen Z-order problemen)
-function Add-BtnIcon {
-    param($Btn, [System.Drawing.Bitmap]$Bmp)
-    $Btn.Image             = $Bmp
-    $Btn.ImageAlign        = 'MiddleLeft'
-    $Btn.TextImageRelation = 'ImageBeforeText'
-}
-
-function New-SectionLabel {
-    param([string]$Text, [int]$Y)
-    $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Text      = $Text
-    $lbl.Font      = $fntSection
-    $lbl.ForeColor = $clrAccentDim
-    $lbl.BackColor = [System.Drawing.Color]::Transparent
-    $lbl.Location  = New-Object System.Drawing.Point(22, $Y)
-    $lbl.AutoSize  = $true
-    $script:leftPanel.Controls.Add($lbl)
-    # Dunne moderne scheidslijn
-    $line = New-Object System.Windows.Forms.Panel
-    $line.BackColor = $clrBorder
-    $line.Location  = New-Object System.Drawing.Point(22, ($Y + 20))
-    $line.Size      = New-Object System.Drawing.Size(420, 1)
-    $script:leftPanel.Controls.Add($line)
-    $script:sectionDividers.Add($line)
-}
-
-# ── Sectie: Systeem ──────────────────────────────────────────────
-New-SectionLabel 'Systeem' $SECT_Y
-
-$btnRestart = New-EOOButton 'Restart' 22 ($SECT_Y + 24) 196 34
-Add-BtnIcon $btnRestart (New-RestartBitmap $clrAccentDim)
+# ── Sectie: Systeem ─────────────────────────────────────────────────
 $btnRestart.Add_Click({
+    if ([System.Windows.MessageBox]::Show('Systeem nu herstarten?', 'Herstarten bevestigen', 'YesNo', 'Warning') -ne 'Yes') { return }
     Write-Console 'Systeem wordt herstart...' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /t 0' -NoNewWindow
 })
 
-$btnShutdown = New-EOOButton 'Shutdown' 226 ($SECT_Y + 24) 196 34 $clrBtnBg $clrDanger ([System.Drawing.Color]::White)
-$btnShutdown.FlatAppearance.MouseOverBackColor = $clrDanger
-$shutdownWhite = [System.Drawing.Color]::White
-$btnShutdown.Add_MouseEnter({ $this.ForeColor = $shutdownWhite })
-$btnShutdown.Add_MouseLeave({ $this.ForeColor = $clrAccentDim })
-Add-BtnIcon $btnShutdown (New-PowerBitmap $clrAccentDim)
 $btnShutdown.Add_Click({
+    if ([System.Windows.MessageBox]::Show('Systeem nu afsluiten?', 'Afsluiten bevestigen', 'YesNo', 'Warning') -ne 'Yes') { return }
     Write-Console 'Systeem wordt afgesloten...' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /s /t 0' -NoNewWindow
 })
 
-$btnBios = New-EOOButton 'Herstart naar BIOS/UEFI' 22 ($SECT_Y + 70)
-Add-BtnIcon $btnBios (New-RestartBitmap $clrAccentDim)
-$script:fullWidthCtrls.Add($btnBios)
 $btnBios.Add_Click({
+    if ([System.Windows.MessageBox]::Show('Nu herstarten naar BIOS/UEFI-instellingen?', 'BIOS-herstart bevestigen', 'YesNo', 'Warning') -ne 'Yes') { return }
     Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen...' 'start'
     $shutdownExe = "$env:windir\System32\shutdown.exe"
-    # Eerst eventuele al geplande shutdown/restart annuleren (bv. van Windows Update),
-    # anders wijst shutdown.exe een nieuw verzoek af (foutcode 1190) en lijkt de knop niets te doen.
     Start-Process -FilePath $shutdownExe -ArgumentList '/a' -NoNewWindow -Wait -ErrorAction SilentlyContinue
     $errFile = "$env:TEMP\eoo_bios_reboot_err.txt"
     $p = Start-Process -FilePath $shutdownExe -ArgumentList '/r', '/fw', '/t', '0' -NoNewWindow -Wait -PassThru -RedirectStandardError $errFile
@@ -910,35 +813,12 @@ $btnBios.Add_Click({
     Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 })
 
-$btnWU = New-EOOButton 'Windows Update openen' 22 ($SECT_Y + 112)
-Add-BtnIcon $btnWU (New-WindowsBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnWU)
-$btnWU.Add_Click({
-    Write-Console 'Windows Update instellingen openen...' 'start'
-    Start-Process 'ms-settings:windowsupdate'
-})
+$btnWU.Add_Click({ Write-Console 'Windows Update instellingen openen...' 'start'; Start-Process 'ms-settings:windowsupdate' })
+$btnDM.Add_Click({ Write-Console 'Apparaatbeheer openen...' 'start'; Start-Process 'devmgmt.msc' })
+$btnAW.Add_Click({ Write-Console 'Windows activeringsscherm openen...' 'start'; Start-Process 'C:\Windows\System32\slui.exe' })
 
-$btnDM = New-EOOButton 'Apparaatbeheer openen' 22 ($SECT_Y + 154)
-Add-BtnIcon $btnDM (New-GearBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnDM)
-$btnDM.Add_Click({
-    Write-Console 'Apparaatbeheer openen...' 'start'
-    Start-Process 'devmgmt.msc'
-})
-
-$btnAW = New-EOOButton 'Windows activeren' 22 ($SECT_Y + 196)
-Add-BtnIcon $btnAW (New-KeyBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnAW)
-$btnAW.Add_Click({
-    Write-Console 'Windows activeringsscherm openen...' 'start'
-    Start-Process "C:\Windows\System32\slui.exe"
-})
-
-$btnWifi = New-EOOButton 'WiFi instellen: WIFI EOO_Install' 22 ($SECT_Y + 238)
-Add-BtnIcon $btnWifi (New-WifiBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnWifi)
 $btnWifi.Add_Click({
-    $script:btnWifi.Enabled = $false
+    $btnWifi.IsEnabled = $false
     Write-Console 'WiFi profiel toevoegen...' 'start'
     $ssid = 'EOO_Install'
     $pw   = 'House-Earth-Wealth-Repair-8'
@@ -969,49 +849,28 @@ $btnWifi.Add_Click({
     [System.IO.File]::WriteAllText($tmp, $xml, [System.Text.Encoding]::UTF8)
     $out = & netsh wlan add profile filename="$tmp" user=all 2>&1
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
-    if ($LASTEXITCODE -eq 0) {
-        Write-Console "[OK] WiFi profiel '$ssid' toegevoegd." 'ok'
-    } else {
-        Write-Console "FOUT: $out" 'error'
-    }
-    $script:btnWifi.Enabled = $true
+    if ($LASTEXITCODE -eq 0) { Write-Console "[OK] WiFi profiel '$ssid' toegevoegd." 'ok' } else { Write-Console "FOUT: $out" 'error' }
+    $btnWifi.IsEnabled = $true
 })
 
-# ── Productsleutel invoer ────────────────────────────────────────
-$lblKeyInput = New-Object System.Windows.Forms.Label
-$lblKeyInput.Text      = 'Productsleutel:'
-$lblKeyInput.Font      = $fntSection
-$lblKeyInput.ForeColor = $clrAccent
-$lblKeyInput.Location  = New-Object System.Drawing.Point(22, ($SECT_Y + 290))
-$lblKeyInput.AutoSize  = $true
-$script:leftPanel.Controls.Add($lblKeyInput)
+$txtKey.Add_TextChanged({
+    $upper = $txtKey.Text.ToUpper()
+    if ($txtKey.Text -cne $upper) {
+        $pos = $txtKey.CaretIndex
+        $txtKey.Text = $upper
+        $txtKey.CaretIndex = $pos
+    }
+})
 
-$txtKey = New-Object System.Windows.Forms.TextBox
-$txtKey.Font        = New-Object System.Drawing.Font("Consolas", 10)
-$txtKey.ForeColor   = $clrAccentDim
-$txtKey.BackColor   = $clrCard
-$txtKey.BorderStyle = 'FixedSingle'
-$txtKey.MaxLength   = 29
-$txtKey.Location    = New-Object System.Drawing.Point(22, ($SECT_Y + 310))
-$txtKey.Size        = New-Object System.Drawing.Size(290, 26)
-$txtKey.CharacterCasing = 'Upper'
-$txtKey.Text        = ''
-$script:leftPanel.Controls.Add($txtKey)
-
-$btnActivateKey = New-EOOButton 'Activeren met sleutel' 22 ($SECT_Y + 350) 420 34
-Add-BtnIcon $btnActivateKey (New-KeyBitmap ([System.Drawing.Color]::White))
-Set-ButtonGradient $btnActivateKey $clrAccent $clrAccentDark
-$script:fullWidthCtrls.Add($btnActivateKey)
 $btnActivateKey.Add_Click({
     $key = $txtKey.Text.Trim()
     if ($key -notmatch '^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$') {
         Write-Console 'Voer een geldige productsleutel in (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX).' 'error'
         return
     }
-    $script:btnActivateKey.Enabled = $false
+    $btnActivateKey.IsEnabled = $false
     Write-Console "Productsleutel installeren: $key" 'start'
-
-    $script:jobActivate = Start-Job -ScriptBlock {
+    Start-EOOJob -Key 'Activate' -ArgumentList @($key) -ScriptBlock {
         param($key)
         $r1 = & cscript.exe //B "$env:windir\system32\slmgr.vbs" /ipk $key 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Sleutel installeren mislukt: $r1" }
@@ -1019,48 +878,28 @@ $btnActivateKey.Add_Click({
         $r2 = & cscript.exe //B "$env:windir\system32\slmgr.vbs" /ato 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Activatie mislukt: $r2" }
         Write-Output "[OK] Windows succesvol geactiveerd."
-    } -ArgumentList $key
-
-    $script:timerActivate = New-Object System.Windows.Forms.Timer
-    $script:timerActivate.Interval = 500
-    $script:timerActivate.Add_Tick({
-        foreach ($line in ($script:jobActivate.ChildJobs[0].Output.ReadAll())) {
-            if ($line -match '^\[OK\]') { Write-Console $line 'ok' } else { Write-Console $line 'info' }
-        }
-        foreach ($err in ($script:jobActivate.ChildJobs[0].Error.ReadAll())) {
-            Write-Console "FOUT: $($err.Exception.Message)" 'error'
-        }
-        if ($script:jobActivate.State -in 'Completed','Failed') {
-            $script:timerActivate.Stop(); $script:timerActivate.Dispose()
-            if ($script:jobActivate.State -eq 'Failed') {
-                Write-Console "FOUT: $($script:jobActivate.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
-            } else {
-                Update-InfoPanel
-            }
-            Remove-Job $script:jobActivate -Force
-            $script:btnActivateKey.Enabled = $true
-        }
-    })
-    $script:timerActivate.Start()
+    } -OnOutput {
+        param($line)
+        if ($line -match '^\[OK\]') { Write-Console $line 'ok' } else { Write-Console $line 'info' }
+    } -OnError {
+        param($e) Write-Console "FOUT: $($e.Exception.Message)" 'error'
+    } -OnComplete {
+        param($succeeded, $reason)
+        if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' } else { Update-InfoPanel }
+        $btnActivateKey.IsEnabled = $true
+    }
 })
 
-# ── Sectie: Drivers ──────────────────────────────────────────────
-New-SectionLabel 'Drivers' ($SECT_Y + 408)
-
-$btnLSU = New-EOOButton 'Lenovo System Update installeren' 22 ($SECT_Y + 432)
-Add-BtnIcon $btnLSU (New-ArrowBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnLSU)
+# ── Sectie: Drivers ─────────────────────────────────────────────────
 $btnLSU.Add_Click({
-    $script:btnLSU.Enabled = $false
+    $btnLSU.IsEnabled = $false
     $script:lsuSignal = $null
     Write-Console 'Lenovo System Update: gestart...' 'start'
-
-    $script:jobLSU = Start-Job -ScriptBlock {
+    Start-EOOJob -Key 'LSU' -ScriptBlock {
         $configUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/lenovoSU.txt'
         $raw     = (Invoke-WebRequest -Uri $configUrl -UseBasicParsing).Content
         $version = ($raw -split "`n" | Where-Object { $_ -match '^Version' }).Split('=')[1].Trim().Trim('"')
-        $url     = ($raw -split "`n" | Where-Object { $_ -match '^URL' }).Split('=',2)[1].Trim().Trim('"')
-
+        $url     = ($raw -split "`n" | Where-Object { $_ -match '^URL' }).Split('=', 2)[1].Trim().Trim('"')
         if (-not $version -or -not $url) { throw 'Config onvolledig: versie of URL ontbreekt.' }
         Write-Output "[1/4] Config opgehaald. Versie: $version"
 
@@ -1095,58 +934,41 @@ $btnLSU.Add_Click({
 
         $tvsu = 'C:\Program Files (x86)\Lenovo\System Update\tvsu.exe'
         if (-not (Test-Path $tvsu)) {
-            $tvsu = (Get-ChildItem 'C:\Program Files (x86)\Lenovo\System Update\tvsu.exe','C:\Program Files\Lenovo\System Update\tvsu.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+            $tvsu = (Get-ChildItem 'C:\Program Files (x86)\Lenovo\System Update\tvsu.exe', 'C:\Program Files\Lenovo\System Update\tvsu.exe' -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
         }
         Write-Output "SIGNAL:TVSU:$tvsu"
-    }
-
-    $script:timerLSU = New-Object System.Windows.Forms.Timer
-    $script:timerLSU.Interval = 500
-    $script:timerLSU.Add_Tick({
-        foreach ($line in ($script:jobLSU.ChildJobs[0].Output.ReadAll())) {
-            if     ($line -match '^SIGNAL:')     { $script:lsuSignal = $line }
-            elseif ($line -match '^\[OK\]')      { Write-Console $line 'ok' }
-            elseif ($line -match 'FOUT|mislukt') { Write-Console $line 'error' }
-            else                                 { Write-Console $line 'info' }
-        }
-        foreach ($err in ($script:jobLSU.ChildJobs[0].Error.ReadAll())) {
-            Write-Console "FOUT: $($err.Exception.Message)" 'error'
-        }
-        if ($script:jobLSU.State -in 'Completed','Failed') {
-            $script:timerLSU.Stop()
-            $script:timerLSU.Dispose()
-
-            if ($script:jobLSU.State -eq 'Failed') {
-                Write-Console "FOUT: $($script:jobLSU.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
+    } -OnOutput {
+        param($line)
+        if     ($line -match '^SIGNAL:')     { $script:lsuSignal = $line }
+        elseif ($line -match '^\[OK\]')      { Write-Console $line 'ok' }
+        elseif ($line -match 'FOUT|mislukt') { Write-Console $line 'error' }
+        else                                 { Write-Console $line 'info' }
+    } -OnError {
+        param($e) Write-Console "FOUT: $($e.Exception.Message)" 'error'
+    } -OnComplete {
+        param($succeeded, $reason)
+        if (-not $succeeded) {
+            Write-Console "FOUT: $reason" 'error'
+        } elseif ($script:lsuSignal -match '^SIGNAL:UPTODATE') {
+            Write-Console 'Al up-to-date, geen actie nodig.' 'ok'
+        } elseif ($script:lsuSignal -match '^SIGNAL:TVSU:(.+)') {
+            $tvsuPath = $matches[1].Trim()
+            if ($tvsuPath -and (Test-Path $tvsuPath)) {
+                Write-Console 'Lenovo System Update wordt gestart...' 'start'
+                Start-Process -FilePath $tvsuPath
+                Write-Console 'Lenovo System Update gestart.' 'ok'
             } else {
-                if ($script:lsuSignal -match '^SIGNAL:UPTODATE') {
-                    Write-Console 'Al up-to-date, geen actie nodig.' 'ok'
-                } elseif ($script:lsuSignal -match '^SIGNAL:TVSU:(.+)') {
-                    $tvsuPath = $matches[1].Trim()
-                    if ($tvsuPath -and (Test-Path $tvsuPath)) {
-                        Write-Console 'Lenovo System Update wordt gestart...' 'start'
-                        Start-Process -FilePath $tvsuPath
-                        Write-Console 'Lenovo System Update gestart.' 'ok'
-                    } else {
-                        Write-Console 'tvsu.exe niet gevonden op verwacht pad.' 'info'
-                    }
-                }
+                Write-Console 'tvsu.exe niet gevonden op verwacht pad.' 'info'
             }
-            Remove-Job $script:jobLSU -Force
-            $script:btnLSU.Enabled = $true
         }
-    })
-    $script:timerLSU.Start()
+        $btnLSU.IsEnabled = $true
+    }
 })
 
-$btnHPIA = New-EOOButton 'HP Image Assistant installeren en draaien' 22 ($SECT_Y + 474)
-Add-BtnIcon $btnHPIA (New-ArrowBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnHPIA)
 $btnHPIA.Add_Click({
-    $script:btnHPIA.Enabled = $false
+    $btnHPIA.IsEnabled = $false
     Write-Console 'HP Image Assistant: gestart...' 'start'
-
-    $script:jobHPIA = Start-Job -ScriptBlock {
+    Start-EOOJob -Key 'HPIA' -ScriptBlock {
         $TextFileURL = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/hpia.txt'
         $text    = Invoke-RestMethod -Uri $TextFileURL
         $version = $null; $url = $null
@@ -1192,80 +1014,48 @@ $btnHPIA.Add_Click({
             -ArgumentList '/Operation:Analyze /Category:All /Selection:All /Action:Install /Silent /ReportFolder:C:\HPIAReport' `
             -NoNewWindow -Wait
         Write-Output '[OK] Klaar. Rapport staat in C:\HPIAReport'
+    } -OnOutput {
+        param($line)
+        if     ($line -match '^\[OK\]')      { Write-Console $line 'ok' }
+        elseif ($line -match 'FOUT|mislukt') { Write-Console $line 'error' }
+        else                                 { Write-Console $line 'info' }
+    } -OnError {
+        param($e) Write-Console "FOUT: $($e.Exception.Message)" 'error'
+    } -OnComplete {
+        param($succeeded, $reason)
+        if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' }
+        $btnHPIA.IsEnabled = $true
     }
-
-    $script:timerHPIA = New-Object System.Windows.Forms.Timer
-    $script:timerHPIA.Interval = 500
-    $script:timerHPIA.Add_Tick({
-        foreach ($line in ($script:jobHPIA.ChildJobs[0].Output.ReadAll())) {
-            if     ($line -match '^\[OK\]')          { Write-Console $line 'ok' }
-            elseif ($line -match 'FOUT|mislukt')     { Write-Console $line 'error' }
-            else                                     { Write-Console $line 'info' }
-        }
-        foreach ($err in ($script:jobHPIA.ChildJobs[0].Error.ReadAll())) {
-            Write-Console "FOUT: $($err.Exception.Message)" 'error'
-        }
-        if ($script:jobHPIA.State -in 'Completed','Failed') {
-            $script:timerHPIA.Stop()
-            $script:timerHPIA.Dispose()
-            if ($script:jobHPIA.State -eq 'Failed') {
-                Write-Console "FOUT: $($script:jobHPIA.ChildJobs[0].JobStateInfo.Reason.Message)" 'error'
-            }
-            Remove-Job $script:jobHPIA -Force
-            $script:btnHPIA.Enabled = $true
-        }
-    })
-    $script:timerHPIA.Start()
 })
 
-# ── Sectie: Autopilot ────────────────────────────────────────────
-New-SectionLabel 'Autopilot' ($SECT_Y + 530)
-
-$btnHWIDOvr = New-EOOButton 'HWID Export - Overwrite (per device)' 22 ($SECT_Y + 554)
-Add-BtnIcon $btnHWIDOvr (New-DownArrowBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnHWIDOvr)
+# ── Sectie: Autopilot ───────────────────────────────────────────────
 $btnHWIDOvr.Add_Click({
     Write-Console 'HWID Export + Azure Files Upload (Overwrite) wordt gestart...' 'start'
     $content = $script_HWID_Overwrite.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-    Write-Console "HWID Azure Files Upload (Overwrite) gestart." 'info'
+    Write-Console 'HWID Azure Files Upload (Overwrite) gestart.' 'info'
 })
 
-$btnHWIDApp = New-EOOButton 'HWID Export - Append (bulk CSV)' 22 ($SECT_Y + 596)
-Add-BtnIcon $btnHWIDApp (New-DownArrowBitmap $clrAccent)
-$script:fullWidthCtrls.Add($btnHWIDApp)
 $btnHWIDApp.Add_Click({
     Write-Console 'HWID Export + Azure Files Upload (Append) wordt gestart...' 'start'
     $content = $script_HWID_Append.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID_Aanvullen.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-    Write-Console "HWID Azure Files Upload (Append) gestart." 'info'
+    Write-Console 'HWID Azure Files Upload (Append) gestart.' 'info'
 })
 
-# ── Sectie: Azure opslag ─────────────────────────────────────────
-New-SectionLabel 'Azure opslag' ($SECT_Y + 638)
-
-$script:btnAzureMount = New-EOOButton 'Azure opslag koppelen (X:)' 22 ($SECT_Y + 662)
-Add-BtnIcon $script:btnAzureMount (New-CloudBitmap $clrAccent)
-$script:fullWidthCtrls.Add($script:btnAzureMount)
-# Voert de eigenlijke koppeling uit (aangeroepen nadat poort 445 al bereikbaar bleek).
-#
-# De GUI draait elevated (hoge integriteit, via -Verb RunAs), maar de Verkenner
-# van de ingelogde gebruiker (bv. defaultuser0 tijdens Autopilot ESP) draait op
-# standaard integriteit. Een schijf die we vanuit dit elevated proces koppelen
-# (New-PSDrive/net use) landt daardoor in de verkeerde tokencontext en is niet
-# betrouwbaar zichtbaar in Verkenner - ook niet met EnableLinkedConnections.
-# Daarom starten we een apart, zichtbaar cmd-venster via Shell.Application: dat
-# venster wordt door explorer.exe zelf opgestart, dus in dezelfde sessie en
-# tokencontext als de ingelogde gebruiker, en de koppeling verschijnt daardoor
-# meteen in diens Verkenner.
+# ── Sectie: Azure opslag ────────────────────────────────────────────
+# Zie EOO-WinInstall-GUIv6.ps1 voor de uitleg waarom de koppeling via
+# een apart, zichtbaar cmd-venster (Shell.Application) loopt i.p.v.
+# vanuit dit elevated proces: anders landt X: in de verkeerde
+# tokencontext en is 'ie niet zichtbaar in de Verkenner van de
+# ingelogde gebruiker (bv. defaultuser0 tijdens Autopilot ESP).
 function Start-AzureMount {
     $sa = $script:afStorageAccount
     $sn = $script:afShareName
     $k  = $script:afKey
 
-    # Opruimen van een eventuele (foutieve) koppeling vanuit de elevated context zelf.
     if (Get-PSDrive -Name X -ErrorAction SilentlyContinue) { Remove-PSDrive -Name X -Force -ErrorAction SilentlyContinue }
 
     $cmdContent = @"
@@ -1295,372 +1085,48 @@ pause
     Write-Console '  Venster geopend om X:\ te koppelen - volg de voortgang daar.' 'info'
     Write-Console '  Koppeling is persistent (blijft ook na herstart bestaan).' 'info'
     Write-Console '─────────────────────────────' 'info'
-    $script:btnAzureMount.Enabled = $true
+    $btnAzureMount.IsEnabled = $true
 }
 
-$script:btnAzureMount.Add_Click({
-    $script:btnAzureMount.Enabled = $false
+$btnAzureMount.Add_Click({
+    $btnAzureMount.IsEnabled = $false
     Write-Console '─── Azure opslag koppelen ───' 'start'
-
     Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
     Write-Console '  Poort 445 testen...' 'info'
 
-    # Test poort 445 eerst apart, in een achtergrond-job (Test-NetConnection kan een
-    # aantal seconden duren als het poort geblokkeerd/gedropt wordt door een firewall -
-    # dat zou de GUI laten bevriezen als het synchroon op de UI-thread zou draaien).
-    $script:jobPortTest = Start-Job -ScriptBlock {
+    $script:portTestResult = $false
+    Start-EOOJob -Key 'PortTest' -ArgumentList @($script:afStorageAccount) -ScriptBlock {
         param($sa)
         (Test-NetConnection -ComputerName "$sa.file.core.windows.net" -Port 445 -WarningAction SilentlyContinue).TcpTestSucceeded
-    } -ArgumentList $script:afStorageAccount
-
-    $script:timerPortTest = New-Object System.Windows.Forms.Timer
-    $script:timerPortTest.Interval = 500
-    $script:timerPortTest.Add_Tick({
-        if ($script:jobPortTest.State -notin 'Completed', 'Failed') { return }
-        $script:timerPortTest.Stop(); $script:timerPortTest.Dispose()
-
-        $portOk = $false
-        if ($script:jobPortTest.State -eq 'Completed') {
-            $portOk = [bool](Receive-Job $script:jobPortTest -ErrorAction SilentlyContinue)
-        }
-        Remove-Job $script:jobPortTest -Force
-
-        if (-not $portOk) {
+    } -OnOutput {
+        param($line) $script:portTestResult = [bool]$line
+    } -OnComplete {
+        param($succeeded, $reason)
+        if (-not $succeeded -or -not $script:portTestResult) {
             Write-Console "FOUT: poort 445 niet bereikbaar bij $($script:afStorageAccount).file.core.windows.net." 'error'
             Write-Console '      Controleer firewall/ISP, of gebruik Azure P2S/S2S VPN of ExpressRoute.' 'info'
             Write-Console '─────────────────────────────' 'info'
-            $script:btnAzureMount.Enabled = $true
+            $btnAzureMount.IsEnabled = $true
             return
         }
-
         Write-Console '  Poort 445 bereikbaar, koppelen...' 'ok'
         Start-AzureMount
-    })
-    $script:timerPortTest.Start()
+    }
 })
 
-# ── Sectie: Rapport ──────────────────────────────────────────────
-New-SectionLabel 'Rapport' ($SECT_Y + 704)
-
-$script:btnExportPDF = New-EOOButton 'Rapport exporteren als PDF' 22 ($SECT_Y + 728)
-Add-BtnIcon $script:btnExportPDF (New-DownArrowBitmap $clrAccent)
-$script:fullWidthCtrls.Add($script:btnExportPDF)
-$script:btnExportPDF.Add_Click({
-    $script:btnExportPDF.Enabled = $false
-    Write-Console 'Rapport als PDF exporteren...' 'start'
-    Export-RapportPDF
-})
-
-# ── Console output panel (rechterkolom – in splitMain.Panel2) ────
-$lblConsoleHdr = New-Object System.Windows.Forms.Label
-$lblConsoleHdr.Text      = 'Log'
-$lblConsoleHdr.Font      = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblConsoleHdr.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
-$lblConsoleHdr.BackColor = [System.Drawing.Color]::Transparent
-$lblConsoleHdr.Location  = New-Object System.Drawing.Point(4, 4)
-$lblConsoleHdr.AutoSize  = $true
-$splitMain.Panel2.Controls.Add($lblConsoleHdr)
-
-$txtConsole = New-Object System.Windows.Forms.RichTextBox
-$txtConsole.Location    = New-Object System.Drawing.Point(0, 22)
-$txtConsole.Size        = New-Object System.Drawing.Size($splitMain.Panel2.Width, ($splitMain.Panel2.Height - 22))
-$txtConsole.BackColor   = $clrAccentDark
-$txtConsole.ForeColor   = [System.Drawing.Color]::FromArgb(203, 213, 225)
-$txtConsole.Font        = New-Object System.Drawing.Font("Consolas", 9)
-$txtConsole.ReadOnly    = $true
-$txtConsole.BorderStyle = 'None'
-$txtConsole.ScrollBars  = 'Vertical'
-$txtConsole.WordWrap    = $true
-$txtConsole.Anchor      = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$splitMain.Panel2.Controls.Add($txtConsole)
-
-function Write-Console {
-    param([string]$Message, [string]$Type = 'info')
-    $time = Get-Date -Format 'HH:mm:ss'
-    $txtConsole.SelectionStart = $txtConsole.TextLength
-    $txtConsole.SelectionLength = 0
-    switch ($Type) {
-        'ok'    { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(96, 190, 240) }
-        'error' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(248, 113, 113) }
-        'start' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(250, 204, 21) }
-        default { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(203, 213, 225) }
-    }
-    $txtConsole.AppendText("[$time] $Message`n")
-    $txtConsole.ScrollToCaret()
-}
-
-# ── Footer inhoud ────────────────────────────────────────────────
-$pnlFooterLine = New-Object System.Windows.Forms.Panel
-$pnlFooterLine.Dock      = 'Top'
-$pnlFooterLine.Height    = 1
-$pnlFooterLine.BackColor = $clrBorder
-$pnlFooter.Controls.Add($pnlFooterLine)
-
-$lblFooter = New-Object System.Windows.Forms.Label
-$lblFooter.Text      = 'Easy Office Online  |  eoo.nl'
-$lblFooter.Font      = $fntSub
-$lblFooter.ForeColor = $clrSubText
-$lblFooter.BackColor = [System.Drawing.Color]::Transparent
-$lblFooter.Location  = New-Object System.Drawing.Point(8, 8)
-$lblFooter.AutoSize  = $true
-$pnlFooter.Controls.Add($lblFooter)
-
-$lblDate = New-Object System.Windows.Forms.Label
-$lblDate.Text      = (Get-Date -Format 'dd-MM-yyyy')
-$lblDate.Font      = $fntSub
-$lblDate.ForeColor = $clrSubText
-$lblDate.BackColor = [System.Drawing.Color]::Transparent
-$lblDate.Location  = New-Object System.Drawing.Point(($pnlFooter.Width - 100), 8)
-$lblDate.AutoSize  = $true
-$lblDate.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlFooter.Controls.Add($lblDate)
-
-# ── Status functies ──────────────────────────────────────────────
-function Set-InfoRow {
-    param($Row, [string]$Text, [bool]$OK)
-    $Row.Label.Text = $Text
-    if ($OK) {
-        $Row.Label.ForeColor = $clrAccent
-        $Row.Icon.Image      = New-CheckBitmap $clrAccent
-    } else {
-        $Row.Label.ForeColor = $clrDanger
-        $Row.Icon.Image      = New-BigExclBitmap
-    }
-}
-
-function Display-WindowsVersion {
-    $osInfo = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
-    $pn = $osInfo.ProductName
-    $dv = $osInfo.DisplayVersion
-    $bn = [int]$osInfo.CurrentBuildNumber
-    if ($bn -ge 22000) { $pn = $pn -replace '10','11' }
-    $rowWin.Label.Text      = "$pn $dv (Build $bn)"
-    $rowWin.Label.ForeColor = $clrSubText
-    # Windows versie altijd neutraal icoon (info)
-    $bmp = New-WindowsBitmap $clrAccent
-    $rowWin.Icon.Image = $bmp
-}
-
-function Display-ActivationStatus {
-    $licenseStatus = Get-CimInstance -Query "SELECT LicenseStatus FROM SoftwareLicensingProduct WHERE PartialProductKey IS NOT NULL AND LicenseStatus=1"
-    $tekst = if ($licenseStatus) { 'Geactiveerd' } else { 'Niet geactiveerd' }
-    Set-InfoRow $rowAct -Text $tekst -OK ([bool]$licenseStatus)
-    $script:okActivation = [bool]$licenseStatus
-}
-
-function Display-TpmStatus {
-    try {
-        $tpm = Get-CimInstance -Namespace 'Root\CIMv2\Security\MicrosoftTpm' -ClassName Win32_Tpm
-        if ($tpm) {
-            $specVersion = $tpm.SpecVersion
-            if ($specVersion) {
-                Set-InfoRow $rowTpm -Text "TPM aanwezig (versie $specVersion)" -OK $true
-            } else {
-                Set-InfoRow $rowTpm -Text 'TPM aanwezig (versie onbekend)' -OK $true
-            }
-            $script:okTpm = $true
-        } else {
-            Set-InfoRow $rowTpm -Text 'Geen TPM gevonden' -OK $false
-            $script:okTpm = $false
-        }
-    } catch {
-        Set-InfoRow $rowTpm -Text 'Geen TPM gevonden' -OK $false
-        $script:okTpm = $false
-    }
-}
-
-function Display-SecureBootStatus {
-    try {
-        if (Get-Command -Name 'Confirm-SecureBootUEFI' -ErrorAction SilentlyContinue) {
-            $secureBootStatus = Confirm-SecureBootUEFI
-            if ($secureBootStatus) {
-                Set-InfoRow $rowBoot -Text 'Secure Boot ingeschakeld' -OK $true
-                $script:okSecureBoot = $true
-            } else {
-                Set-InfoRow $rowBoot -Text 'Secure Boot uitgeschakeld' -OK $false
-                $script:okSecureBoot = $false
-            }
-        } else {
-            $rowBoot.Label.Text      = 'Secure Boot: niet ondersteund op dit platform'
-            $rowBoot.Label.ForeColor = $clrSubText
-            $rowBoot.Icon.Image      = $null
-            $script:okSecureBoot = $false
-        }
-    } catch {
-        $rowBoot.Label.Text      = 'Secure Boot: geen UEFI systeem'
-        $rowBoot.Label.ForeColor = $clrSubText
-        $rowBoot.Icon.Image      = $null
-        $script:okSecureBoot = $false
-    }
-}
-
-function Display-InternetStatus {
-    $ping = Test-Connection -ComputerName 'google.nl' -Count 1 -Quiet -ErrorAction SilentlyContinue
-    if ($ping) {
-        Set-InfoRow $rowNet -Text 'Internetverbinding aanwezig' -OK $true
-        $script:okInternet = $true
-    } else {
-        Set-InfoRow $rowNet -Text 'Geen internetverbinding' -OK $false
-        $script:okInternet = $false
-    }
-}
-
-function Display-HPBloatware {
-    $hpBloatNames = @(
-        'HP Wolf Security',
-        'HP Wolf Security Application Support for Chrome',
-        'HP Wolf Security Application Support for Windows',
-        'HP Sure Click',
-        'HP Sure Sense',
-        'HP Sure Connect',
-        'HP Sure Start',
-        'HP Sure View',
-        'HP Support Assistant',
-        'HP Jumpstart',
-        'HP Instant Ink',
-        'HP Audio Switch',
-        'HP Documentation',
-        'HP Notifications',
-        'HP PC Hardware Diagnostics',
-        'HP Privacy Settings',
-        'HP Smart',
-        'myHP',
-        'Poly Lens',
-        'HP LAN/WLAN Management'
-    )
-
-    $regPaths = @(
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    )
-
-    $found = @()
-    $regApps = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName }
-    foreach ($app in $regApps) {
-        foreach ($bloat in $hpBloatNames) {
-            if ($app.DisplayName -like "*$bloat*") {
-                $found += $app.DisplayName
-                break
-            }
-        }
-    }
-    try {
-        $uwp = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
-            Where-Object { $_.Publisher -like '*HP Inc*' -or $_.Publisher -like '*Hewlett*' }
-        foreach ($app in $uwp) { $found += $app.Name }
-    } catch {}
-
-    if ($found.Count -eq 0) {
-        Set-InfoRow $rowHP -Text 'Geen HP bloatware gevonden' -OK $true
-    } else {
-        Set-InfoRow $rowHP -Text "HP bloatware: $($found.Count) app(s) gevonden" -OK $false
-    }
-    $script:hpBloatFound = $found
-}
-
-function Display-LaptopType {
-    try {
-        $chassisTypes = (Get-CimInstance Win32_SystemEnclosure).ChassisTypes
-        $laptopTypes  = @(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32)
-        $isLaptop     = $chassisTypes | Where-Object { $_ -in $laptopTypes }
-        if ($isLaptop) {
-            $rowLaptop.Label.Text      = 'Apparaattype: Laptop'
-            $rowLaptop.Label.ForeColor = $clrSubText
-            $rowLaptop.Icon.Image      = New-CheckBitmap $clrAccent
-        } else {
-            $rowLaptop.Label.Text      = 'Apparaattype: Desktop'
-            $rowLaptop.Label.ForeColor = $clrSubText
-            $rowLaptop.Icon.Image      = New-CheckBitmap $clrAccent
-        }
-        $script:isLaptopDevice = [bool]$isLaptop
-    } catch {
-        $rowLaptop.Label.Text      = 'Apparaattype: onbekend'
-        $rowLaptop.Label.ForeColor = $clrSubText
-        $rowLaptop.Icon.Image      = $null
-        $script:isLaptopDevice = $false
-    }
-}
-
-function Display-WifiAdapter {
-    try {
-        $wifi = Get-NetAdapter -Physical -ErrorAction SilentlyContinue |
-                Where-Object { $_.MediaType -eq '802.11' -or $_.InterfaceDescription -match 'wi.?fi|wireless|802\.11' }
-        if ($wifi) {
-            $name = ($wifi | Select-Object -First 1).InterfaceDescription
-            Set-InfoRow $rowWifi -Text "WiFi adapter aanwezig: $name" -OK $true
-            $script:okWifi = $true
-        } else {
-            Set-InfoRow $rowWifi -Text 'Geen WiFi adapter gevonden' -OK $false
-            $script:okWifi = $false
-        }
-    } catch {
-        Set-InfoRow $rowWifi -Text 'WiFi adapter: controlefout' -OK $false
-        $script:okWifi = $false
-    }
-}
-
-function Display-SerialNumber {
-    try {
-        $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
-        if (-not $serial) { $serial = 'ONBEKEND' }
-        $rowSerial.Label.Text      = "Serienummer: $serial"
-        $rowSerial.Label.ForeColor = $clrSubText
-        $rowSerial.Icon.Image      = New-CheckBitmap $clrAccent
-        $script:deviceSerial = $serial
-    } catch {
-        $rowSerial.Label.Text      = 'Serienummer: onbekend'
-        $rowSerial.Label.ForeColor = $clrSubText
-        $rowSerial.Icon.Image      = $null
-        $script:deviceSerial = 'ONBEKEND'
-    }
-}
-
-function Display-AllGoodThumb {
-    if ($script:eggThumbActive) { return }
-    if ($script:okActivation -and $script:okTpm -and $script:okSecureBoot -and $script:okInternet) {
-        $lblStatus.Text      = [System.Char]::ConvertFromUtf32(0x1F44D)
-        $lblStatus.ForeColor = $clrAccent
-    } else {
-        $lblStatus.Text      = '!'
-        $lblStatus.Font      = New-Object System.Drawing.Font("Segoe UI Emoji", 52, [System.Drawing.FontStyle]::Regular)
-        $lblStatus.ForeColor = $clrDanger
-    }
-}
-
-function Update-InfoPanel {
-    Display-WindowsVersion
-    Display-ActivationStatus
-    Display-TpmStatus
-    Display-SecureBootStatus
-    Display-InternetStatus
-    Display-HPBloatware
-    Display-LaptopType
-    Display-WifiAdapter
-    Display-SerialNumber
-    Display-AllGoodThumb
-}
-
+# ── Sectie: Rapport ─────────────────────────────────────────────────
 function Get-HPIASummary {
     $rapDir = 'C:\HPIAReport'
     if (-not (Test-Path $rapDir)) { return $null }
-
     $latest = Get-ChildItem $rapDir -Filter '*.html' -File -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $latest) { return $null }
-
     try {
         $html = [System.IO.File]::ReadAllText($latest.FullName)
-
         $text = $html -replace '<[^>]+>', ' ' -replace '&[^;]+;', ' ' -replace '\s+', ' '
-
         $counts = [ordered]@{}
-        $failCount   = 0
-        $passRestart = 0
-
-        # Type 1: Installatierapport – heeft Pass / Pass * / Fail statuswaarden
         $passClean   = ([regex]::Matches($html, '(?i)>\s*Pass\s*<')).Count
         $passRestart = ([regex]::Matches($html, '(?i)>\s*Pass\s+\*\s*<')).Count
         $failCount   = ([regex]::Matches($html, '(?i)>\s*Fail\s*<')).Count
@@ -1671,33 +1137,20 @@ function Get-HPIASummary {
             if ($passRestart -gt 0) { $counts['Herstart vereist'] = $passRestart }
             if ($failCount   -gt 0) { $counts['Mislukt']          = $failCount }
         } else {
-            # Type 2: Analyserapport – Missing Drivers / Out-of-Date structuur
-            if ($text -match '(?i)Missing\s+Drivers\s+(\d+)') {
-                $counts['Ontbrekende drivers'] = [int]$matches[1]
-            }
-            if ($text -match '(?i)Missing\s+Drivers\s+\d+\s+Out-of-Date\s+(\d+)') {
-                $counts['Verouderde drivers'] = [int]$matches[1]
-            }
-            # Unieke SP-nummers tellen als aanbevelingen
-            $spList = [regex]::Matches($text, '(?i)\bsp\d{5,6}\b') |
-                      ForEach-Object { $_.Value.ToLower() } | Select-Object -Unique
+            if ($text -match '(?i)Missing\s+Drivers\s+(\d+)') { $counts['Ontbrekende drivers'] = [int]$matches[1] }
+            if ($text -match '(?i)Missing\s+Drivers\s+\d+\s+Out-of-Date\s+(\d+)') { $counts['Verouderde drivers'] = [int]$matches[1] }
+            $spList = [regex]::Matches($text, '(?i)\bsp\d{5,6}\b') | ForEach-Object { $_.Value.ToLower() } | Select-Object -Unique
             if ($spList.Count -gt 0) { $counts['Aanbevelingen'] = $spList.Count }
         }
 
-        # Body-tekst: sla samenvatting bovenin (System Info / Product Details) over
         $bodyText = $text
         foreach ($kw in @('Drivers and Software', 'Installation Status', 'Recommendations')) {
             $pos = $text.IndexOf($kw, [System.StringComparison]::OrdinalIgnoreCase)
             if ($pos -ge 0) { $bodyText = $text.Substring($pos).Trim(); break }
         }
-
         return @{
-            File     = $latest.Name
-            Date     = $latest.LastWriteTime.ToString('dd-MM-yyyy HH:mm')
-            BodyText = $bodyText
-            Counts   = $counts
-            HasFail  = $failCount -gt 0
-            Restart  = $passRestart -gt 0
+            File = $latest.Name; Date = $latest.LastWriteTime.ToString('dd-MM-yyyy HH:mm')
+            BodyText = $bodyText; Counts = $counts; HasFail = $failCount -gt 0; Restart = $passRestart -gt 0
         }
     } catch { return $null }
 }
@@ -1709,64 +1162,57 @@ function Export-RapportPDF {
     $fn = "EOO_Rapport_${safeSerial}_${ts}.pdf"
     $outputPath = Join-Path $env:TEMP $fn
 
-    $pdfPrinterAvail = [bool]([System.Drawing.Printing.PrinterSettings]::InstalledPrinters |
-        Where-Object { $_ -eq 'Microsoft Print to PDF' })
+    $pdfPrinterAvail = [bool]([System.Drawing.Printing.PrinterSettings]::InstalledPrinters | Where-Object { $_ -eq 'Microsoft Print to PDF' })
     if (-not $pdfPrinterAvail) {
         Write-Console 'FOUT: "Microsoft Print to PDF" printer niet gevonden op dit systeem.' 'error'
-        $script:btnExportPDF.Enabled = $true
+        $btnExportPDF.IsEnabled = $true
         return
     }
 
     $script:_pdfData = @{
-        Serial   = $serial
-        Computer = $env:COMPUTERNAME
-        Date     = Get-Date -Format 'dd-MM-yyyy HH:mm:ss'
-        Version  = $script:currentVersion
-        Logo     = $script:logoImage
-        Checks   = @(
-            @{ Label = $rowWin.Label.Text;    OK = $null }
-            @{ Label = $rowAct.Label.Text;    OK = $script:okActivation }
-            @{ Label = $rowTpm.Label.Text;    OK = $script:okTpm }
-            @{ Label = $rowBoot.Label.Text;   OK = $script:okSecureBoot }
-            @{ Label = $rowNet.Label.Text;    OK = $script:okInternet }
-            @{ Label = $rowHP.Label.Text;     OK = ($script:hpBloatFound.Count -eq 0) }
-            @{ Label = $rowLaptop.Label.Text; OK = $null }
-            @{ Label = $rowWifi.Label.Text;   OK = $script:okWifi }
-            @{ Label = $rowSerial.Label.Text; OK = $null }
+        Serial = $serial; Computer = $env:COMPUTERNAME; Date = Get-Date -Format 'dd-MM-yyyy HH:mm:ss'
+        Version = $script:currentVersion; Logo = $script:logoImageGdi
+        Checks = @(
+            @{ Label = $script:infoRowMap['Windows'].Label.Text;     OK = $null }
+            @{ Label = $script:infoRowMap['Activatie'].Label.Text;   OK = $script:okActivation }
+            @{ Label = $script:infoRowMap['Tpm'].Label.Text;         OK = $script:okTpm }
+            @{ Label = $script:infoRowMap['SecureBoot'].Label.Text;  OK = $script:okSecureBoot }
+            @{ Label = $script:infoRowMap['Internet'].Label.Text;    OK = $script:okInternet }
+            @{ Label = $script:infoRowMap['HP'].Label.Text;          OK = ($script:hpBloatFound.Count -eq 0) }
+            @{ Label = $script:infoRowMap['Laptop'].Label.Text;      OK = $null }
+            @{ Label = $script:infoRowMap['Wifi'].Label.Text;        OK = $script:okWifi }
+            @{ Label = $script:infoRowMap['Serienummer'].Label.Text; OK = $null }
         )
-        Bloat    = @($script:hpBloatFound)
-        HPIA     = (Get-HPIASummary)
+        Bloat = @($script:hpBloatFound); HPIA = (Get-HPIASummary)
     }
 
     $pd = New-Object System.Drawing.Printing.PrintDocument
-    $pd.PrinterSettings.PrinterName  = 'Microsoft Print to PDF'
-    $pd.PrinterSettings.PrintToFile  = $true
+    $pd.PrinterSettings.PrinterName   = 'Microsoft Print to PDF'
+    $pd.PrinterSettings.PrintToFile   = $true
     $pd.PrinterSettings.PrintFileName = $outputPath
 
     $pd.Add_PrintPage({
         param($s2, $ev)
-        $d   = $script:_pdfData
-        $g   = $ev.Graphics
-        $lm  = [float]$ev.MarginBounds.Left
-        $tm  = [float]$ev.MarginBounds.Top
-        $pw  = [float]$ev.MarginBounds.Width
+        $d  = $script:_pdfData
+        $g  = $ev.Graphics
+        $lm = [float]$ev.MarginBounds.Left
+        $tm = [float]$ev.MarginBounds.Top
+        $pw = [float]$ev.MarginBounds.Width
 
-        $fTitle   = New-Object System.Drawing.Font('Arial', 16, [System.Drawing.FontStyle]::Bold)
-        $fSub     = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Italic)
+        $fTitle = New-Object System.Drawing.Font('Arial', 16, [System.Drawing.FontStyle]::Bold)
+        $fSub = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Italic)
         $fSection = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
-        $fCheck   = New-Object System.Drawing.Font('Arial', 10)
-        $fSmall   = New-Object System.Drawing.Font('Arial', 9)
+        $fCheck = New-Object System.Drawing.Font('Arial', 10)
+        $fSmall = New-Object System.Drawing.Font('Arial', 9)
 
         $bBlack = [System.Drawing.Brushes]::Black
         $bGreen = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 0))
-        $bRed   = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(192, 0, 0))
-        $bGray  = [System.Drawing.Brushes]::DimGray
-        $bTeal  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 128))
+        $bRed = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(192, 0, 0))
+        $bGray = [System.Drawing.Brushes]::DimGray
+        $bTeal = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 128))
         $penLine = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 128, 128), 2)
 
         $y = $tm
-
-        # Logo rechts bovenaan
         if ($null -ne $d.Logo) {
             $logoH = [int]48
             $logoW = [int]($d.Logo.Width * $logoH / $d.Logo.Height)
@@ -1774,56 +1220,40 @@ function Export-RapportPDF {
             $g.DrawImage($d.Logo, (New-Object System.Drawing.Rectangle($logoX, [int]$tm, $logoW, $logoH)))
         }
 
-        $g.DrawString('EOO Windows Installatie Rapport', $fTitle, $bTeal, $lm, $y)
-        $y += 34
-        $g.DrawString("Datum: $($d.Date)", $fSub, $bGray, $lm, $y)
-        $y += 20
-        $g.DrawString("Computer: $($d.Computer)   |   Serienummer: $($d.Serial)", $fSub, $bGray, $lm, $y)
-        $y += 28
-        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
-        $y += 16
-        $g.DrawString('Systeemcontroles', $fSection, $bBlack, $lm, $y)
-        $y += 28
+        $g.DrawString('EOO Windows Installatie Rapport', $fTitle, $bTeal, $lm, $y); $y += 34
+        $g.DrawString("Datum: $($d.Date)", $fSub, $bGray, $lm, $y); $y += 20
+        $g.DrawString("Computer: $($d.Computer)   |   Serienummer: $($d.Serial)", $fSub, $bGray, $lm, $y); $y += 28
+        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y); $y += 16
+        $g.DrawString('Systeemcontroles', $fSection, $bBlack, $lm, $y); $y += 28
 
         foreach ($chk in $d.Checks) {
             if ($null -eq $chk.OK) {
-                $sym = "$([char]0x25CF)"
-                $g.DrawString("$sym  $($chk.Label)", $fCheck, $bGray, $lm, $y)
+                $g.DrawString("$([char]0x25CF)  $($chk.Label)", $fCheck, $bGray, $lm, $y)
             } elseif ($chk.OK) {
-                $sym = "$([char]0x2713)"
-                $g.DrawString("$sym  $($chk.Label)", $fCheck, $bGreen, $lm, $y)
+                $g.DrawString("$([char]0x2713)  $($chk.Label)", $fCheck, $bGreen, $lm, $y)
             } else {
-                $sym = "$([char]0x2717)"
-                $g.DrawString("$sym  $($chk.Label)", $fCheck, $bRed, $lm, $y)
+                $g.DrawString("$([char]0x2717)  $($chk.Label)", $fCheck, $bRed, $lm, $y)
             }
             $y += 22
         }
 
         if ($d.Bloat.Count -gt 0) {
             $y += 8
-            foreach ($item in $d.Bloat) {
-                $g.DrawString("     - $item", $fSmall, $bRed, $lm, $y)
-                $y += 18
-            }
+            foreach ($item in $d.Bloat) { $g.DrawString("     - $item", $fSmall, $bRed, $lm, $y); $y += 18 }
         }
 
-        # HPIA sectie
         $y += 20
-        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y)
-        $y += 14
-        $g.DrawString('HP Image Assistant', $fSection, $bBlack, $lm, $y)
-        $y += 24
+        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y); $y += 14
+        $g.DrawString('HP Image Assistant', $fSection, $bBlack, $lm, $y); $y += 24
 
         if ($null -ne $d.HPIA) {
-            $g.DrawString("Rapport: $($d.HPIA.File)   |   $($d.HPIA.Date)", $fSmall, $bGray, $lm, $y)
-            $y += 16
+            $g.DrawString("Rapport: $($d.HPIA.File)   |   $($d.HPIA.Date)", $fSmall, $bGray, $lm, $y); $y += 16
             if ($d.HPIA.BodyText) {
                 $footerTopY = [float]$ev.MarginBounds.Bottom - 24
-                $availH     = [Math]::Max(10, $footerTopY - $y - 4)
+                $availH = [Math]::Max(10, $footerTopY - $y - 4)
                 $sf = New-Object System.Drawing.StringFormat
                 $sf.Trimming = [System.Drawing.StringTrimming]::Word
-                $g.DrawString($d.HPIA.BodyText, $fSmall, $bBlack,
-                    [System.Drawing.RectangleF]::new($lm, $y, $pw, $availH), $sf)
+                $g.DrawString($d.HPIA.BodyText, $fSmall, $bBlack, [System.Drawing.RectangleF]::new($lm, $y, $pw, $availH), $sf)
                 $sf.Dispose()
             } else {
                 $g.DrawString('Geen inhoud gevonden in rapport.', $fSmall, $bGray, $lm, $y)
@@ -1834,14 +1264,11 @@ function Export-RapportPDF {
             $fBig.Dispose()
         }
 
-        # Footer altijd vastgezet onderaan de pagina
         $fy = [float]$ev.MarginBounds.Bottom - 22
-        $g.DrawLine($penLine, $lm, $fy, ($lm + $pw), $fy)
-        $fy += 10
+        $g.DrawLine($penLine, $lm, $fy, ($lm + $pw), $fy); $fy += 10
         $g.DrawString("Gegenereerd door EOO Windows Installatie Tool v$($d.Version)", $fSmall, $bGray, $lm, $fy)
 
-        $penLine.Dispose()
-        $bGreen.Dispose(); $bRed.Dispose(); $bTeal.Dispose()
+        $penLine.Dispose(); $bGreen.Dispose(); $bRed.Dispose(); $bTeal.Dispose()
         $fTitle.Dispose(); $fSub.Dispose(); $fSection.Dispose(); $fCheck.Dispose(); $fSmall.Dispose()
         $ev.HasMorePages = $false
     })
@@ -1849,15 +1276,10 @@ function Export-RapportPDF {
     try {
         $pd.Print()
         Write-Console 'PDF gereed, uploaden naar Azure Files...' 'info'
-
-        $script:_jobPdfUpload = Start-Job -ScriptBlock {
+        Start-EOOJob -Key 'PdfUpload' -ArgumentList @($outputPath, $script:afStorageAccount, $script:afShareName, $script:afKey) -ScriptBlock {
             param($localPath, $sa, $sn, $k)
-            # Wacht tot PDF op schijf staat (spooler kan even nalopen)
             $waited = 0
-            while (-not (Test-Path $localPath) -and $waited -lt 30) {
-                Start-Sleep -Milliseconds 500
-                $waited++
-            }
+            while (-not (Test-Path $localPath) -and $waited -lt 30) { Start-Sleep -Milliseconds 500; $waited++ }
             if (-not (Test-Path $localPath)) { throw 'PDF niet beschikbaar na 15 seconden.' }
             $fn = [System.IO.Path]::GetFileName($localPath)
             if (-not (Test-Path 'X:\')) {
@@ -1866,103 +1288,52 @@ function Export-RapportPDF {
                 }
                 try {
                     New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
-                } catch {
-                    throw "Azure Files koppelen mislukt: $_"
-                }
+                } catch { throw "Azure Files koppelen mislukt: $_" }
             }
             $rapDir = 'X:\Rapporten'
             if (-not (Test-Path $rapDir)) { New-Item -ItemType Directory -Path $rapDir | Out-Null }
             Copy-Item -Path $localPath -Destination "$rapDir\$fn" -Force
             Remove-Item $localPath -Force -ErrorAction SilentlyContinue
             Write-Output "OK:$fn"
-        } -ArgumentList $outputPath, $script:afStorageAccount, $script:afShareName, $script:afKey
-
-        $script:_timerPdfUpload = New-Object System.Windows.Forms.Timer
-        $script:_timerPdfUpload.Interval = 500
-        $script:_timerPdfUpload.Add_Tick({
-            foreach ($line in ($script:_jobPdfUpload.ChildJobs[0].Output.ReadAll())) {
-                if ($line -match '^OK:(.+)') {
-                    Write-Console "[OK] Geupload naar Azure Files: Rapporten\$($matches[1])" 'ok'
-                }
-            }
-            foreach ($err in ($script:_jobPdfUpload.ChildJobs[0].Error.ReadAll())) {
-                Write-Console "FOUT upload: $($err.Exception.Message)" 'error'
-            }
-            if ($script:_jobPdfUpload.State -in 'Completed','Failed') {
-                $script:_timerPdfUpload.Stop()
-                $script:_timerPdfUpload.Dispose()
-                if ($script:_jobPdfUpload.State -eq 'Failed') {
-                    Write-Console "FOUT: Upload naar Azure Files mislukt." 'error'
-                }
-                Remove-Job $script:_jobPdfUpload -Force
-                $script:btnExportPDF.Enabled = $true
-            }
-        })
-        $script:_timerPdfUpload.Start()
-
+        } -OnOutput {
+            param($line)
+            if ($line -match '^OK:(.+)') { Write-Console "[OK] Geupload naar Azure Files: Rapporten\$($matches[1])" 'ok' }
+        } -OnError {
+            param($e) Write-Console "FOUT upload: $($e.Exception.Message)" 'error'
+        } -OnComplete {
+            param($succeeded, $reason)
+            if (-not $succeeded) { Write-Console 'FOUT: Upload naar Azure Files mislukt.' 'error' }
+            $btnExportPDF.IsEnabled = $true
+        }
     } catch {
         Write-Console "FOUT bij exporteren PDF: $_" 'error'
-        $script:btnExportPDF.Enabled = $true
+        $btnExportPDF.IsEnabled = $true
     } finally {
         $pd.Dispose()
         $script:_pdfData = $null
     }
 }
 
-$btnRefreshInfo = New-Object System.Windows.Forms.Button
-$btnRefreshInfo.Text      = 'Vernieuwen'
-$btnRefreshInfo.Font      = $fntSub
-$btnRefreshInfo.ForeColor = $clrAccentDim
-$btnRefreshInfo.BackColor = $clrCard
-$btnRefreshInfo.FlatStyle = 'Flat'
-$btnRefreshInfo.FlatAppearance.BorderColor        = $clrBorder
-$btnRefreshInfo.FlatAppearance.BorderSize         = 1
-$btnRefreshInfo.FlatAppearance.MouseOverBackColor = $clrAccent
-$btnRefreshInfo.Location  = New-Object System.Drawing.Point(278, ($INFO_PAD_T + $INFO_ROWS * $INFO_ROW_H + 8))
-$btnRefreshInfo.Size      = New-Object System.Drawing.Size(134, 24)
-$btnRefreshInfo.Anchor    = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
-$btnRefreshInfo.Cursor    = [System.Windows.Forms.Cursors]::Hand
-$btnRefreshInfo.TextAlign = 'MiddleCenter'
-$btnRefreshInfo.Add_MouseEnter({ $this.ForeColor = [System.Drawing.Color]::White })
-$btnRefreshInfo.Add_MouseLeave({ $this.ForeColor = $clrAccentDim })
-$btnRefreshInfo.Add_Click({ Update-InfoPanel })
-$pnlInfo.Controls.Add($btnRefreshInfo)
+$btnExportPDF.Add_Click({
+    $btnExportPDF.IsEnabled = $false
+    Write-Console 'Rapport als PDF exporteren...' 'start'
+    Export-RapportPDF
+})
 
-Update-InfoPanel
+# ── Opstart ─────────────────────────────────────────────────────────
+$window.Add_Loaded({
+    Write-Console 'Systeemcontrole uitgevoerd.' 'info'
+    Update-InfoPanel
+    Write-Console "Windows activatie: $(if ($script:okActivation) { 'OK' } else { 'NIET geactiveerd' })" $(if ($script:okActivation) { 'ok' } else { 'error' })
+    Write-Console "TPM: $(if ($script:okTpm) { 'OK' } else { 'NIET gevonden' })" $(if ($script:okTpm) { 'ok' } else { 'error' })
+    Write-Console "Secure Boot: $(if ($script:okSecureBoot) { 'OK' } else { 'NIET ingeschakeld' })" $(if ($script:okSecureBoot) { 'ok' } else { 'error' })
+    Write-Console "Internet: $(if ($script:okInternet) { 'OK' } else { 'GEEN verbinding' })" $(if ($script:okInternet) { 'ok' } else { 'error' })
+    if ($script:hpBloatFound.Count -gt 0) {
+        Write-Console "HP bloatware ($($script:hpBloatFound.Count) app(s)):" 'error'
+        foreach ($item in $script:hpBloatFound) { Write-Console "  - $item" 'error' }
+    } else {
+        Write-Console 'HP bloatware: geen gevonden' 'ok'
+    }
+})
 
-Write-Console 'Systeemcontrole uitgevoerd.' 'info'
-Write-Console "Windows activatie: $(if ($script:okActivation) { 'OK' } else { 'NIET geactiveerd' })" $(if ($script:okActivation) { 'ok' } else { 'error' })
-Write-Console "TPM: $(if ($script:okTpm) { 'OK' } else { 'NIET gevonden' })" $(if ($script:okTpm) { 'ok' } else { 'error' })
-Write-Console "Secure Boot: $(if ($script:okSecureBoot) { 'OK' } else { 'NIET ingeschakeld' })" $(if ($script:okSecureBoot) { 'ok' } else { 'error' })
-Write-Console "Internet: $(if ($script:okInternet) { 'OK' } else { 'GEEN verbinding' })" $(if ($script:okInternet) { 'ok' } else { 'error' })
-if ($script:hpBloatFound.Count -gt 0) {
-    Write-Console "HP bloatware ($($script:hpBloatFound.Count) app(s)):" 'error'
-    foreach ($item in $script:hpBloatFound) { Write-Console "  - $item" 'error' }
-} else {
-    Write-Console 'HP bloatware: geen gevonden' 'ok'
-}
-
-# ── Versiecheck via GitHub ────────────────────────────────────────
-function Start-VersionCheck {
-    $script:timerVersionCheck          = New-Object System.Windows.Forms.Timer
-    $script:timerVersionCheck.Interval = 2000
-    $script:timerVersionCheck.Add_Tick({
-        $script:timerVersionCheck.Stop()
-        try {
-            $raw = (Invoke-WebRequest -Uri $script:githubScriptUrl -UseBasicParsing).Content
-            if ($raw -match '\$script:currentVersion\s*=\s*\[System\.Version\]''([\d\.]+)''') {
-                $script:remoteVersion = [System.Version]$matches[1]
-                if ($script:remoteVersion -gt $script:currentVersion) {
-                    $script:btnUpdate.Text    = "Update v$script:remoteVersion"
-                    $script:btnUpdate.Visible = $true
-                    $lblVersion.ForeColor     = [System.Drawing.Color]::FromArgb(255, 200, 0)
-                }
-            }
-        } catch { }
-        $script:timerVersionCheck.Dispose()
-        $script:timerVersionCheck = $null
-    })
-    $script:timerVersionCheck.Start()
-}
-
-[void]$form.ShowDialog()
+[void]$window.ShowDialog()
