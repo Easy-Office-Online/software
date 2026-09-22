@@ -497,110 +497,97 @@ function Write-Console {
     $lstConsole.ScrollIntoView($tb)
 }
 
-# ── Easter egg: 5x klikken op het logo -> Raphael knipoogt en verdwijnt ─
+# ── Easter egg: 5x klikken op het logo -> Raphael-kopje knipoogt en verdwijnt ─
 function Show-NinjaTurtleEasterEgg {
-    $turtle = New-Object System.Windows.Controls.TextBlock
-    $turtle.Text = [char]::ConvertFromUtf32(0x1F422)   # 🐢
-    $turtle.FontSize = 54
-    $turtle.HorizontalAlignment = 'Left'
-    $turtle.VerticalAlignment = 'Top'
-    $turtle.Margin = [System.Windows.Thickness]::new(560, 4, 0, 0)
-    $turtle.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
+    $art = New-Object System.Windows.Controls.Canvas
+    $art.Width = 76; $art.Height = 64
+    $art.HorizontalAlignment = 'Left'
+    $art.VerticalAlignment = 'Top'
+    $art.Margin = [System.Windows.Thickness]::new(552, 2, 0, 0)
+    $art.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
     $scale = New-Object System.Windows.Media.ScaleTransform(0, 0)
-    $turtle.RenderTransform = $scale
-    [void]$headerGrid.Children.Add($turtle)
+    $art.RenderTransform = $scale
+    [void]$headerGrid.Children.Add($art)
 
-    # Rode hoofdband met wapperend staartje -- het herkenbaarste Raphael-kenmerk
-    # (de emoji zelf is niet herkleurbaar, dus deze accessoires worden los overlayd)
-    $raphRed = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xE3, 0x24, 0x2B))
+    $black = [System.Windows.Media.Brushes]::Black
+    $white = [System.Windows.Media.Brushes]::White
+    $green = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0x6E, 0xBE, 0x4A))
+    $red   = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xE8, 0x38, 0x2E))
 
-    $bandana = New-Object System.Windows.Controls.Border
-    $bandana.Width = 24; $bandana.Height = 8
-    $bandana.CornerRadius = [System.Windows.CornerRadius]::new(3)
-    $bandana.Background = $raphRed
-    $bandana.HorizontalAlignment = 'Left'
-    $bandana.VerticalAlignment = 'Top'
-    $bandana.Margin = [System.Windows.Thickness]::new(564, 8, 0, 0)
-    $bandana.RenderTransform = New-Object System.Windows.Media.RotateTransform(-8)
-    $bandana.Opacity = 0
-    [void]$headerGrid.Children.Add($bandana)
+    function New-EggShape {
+        param([string]$Type, [double]$W, [double]$H, [double]$X, [double]$Y, $Fill,
+              [double]$StrokeThickness = 2.5, [double]$Radius = 0, [double]$Rotate = 0)
+        $s = New-Object $Type
+        $s.Width = $W; $s.Height = $H
+        if ($Fill) { $s.Fill = $Fill }
+        $s.Stroke = $black
+        $s.StrokeThickness = $StrokeThickness
+        if ($Type -eq 'System.Windows.Shapes.Rectangle') { $s.RadiusX = $Radius; $s.RadiusY = $Radius }
+        if ($Rotate -ne 0) {
+            $s.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
+            $s.RenderTransform = New-Object System.Windows.Media.RotateTransform($Rotate)
+        }
+        [System.Windows.Controls.Canvas]::SetLeft($s, $X)
+        [System.Windows.Controls.Canvas]::SetTop($s, $Y)
+        [void]$art.Children.Add($s)
+        return $s
+    }
+    function New-EggPath {
+        param([string]$Data, [double]$StrokeThickness = 2.5)
+        $p = New-Object System.Windows.Shapes.Path
+        $p.Data = [System.Windows.Media.Geometry]::Parse($Data)
+        $p.Stroke = $black
+        $p.StrokeThickness = $StrokeThickness
+        $p.StrokeStartLineCap = 'Round'; $p.StrokeEndLineCap = 'Round'
+        [void]$art.Children.Add($p)
+        return $p
+    }
 
-    $bandanaTail = New-Object System.Windows.Controls.Border
-    $bandanaTail.Width = 4; $bandanaTail.Height = 15
-    $bandanaTail.CornerRadius = [System.Windows.CornerRadius]::new(2)
-    $bandanaTail.Background = $raphRed
-    $bandanaTail.HorizontalAlignment = 'Left'
-    $bandanaTail.VerticalAlignment = 'Top'
-    $bandanaTail.Margin = [System.Windows.Thickness]::new(586, 10, 0, 0)
-    $bandanaTail.RenderTransform = New-Object System.Windows.Media.RotateTransform(35)
-    $bandanaTail.Opacity = 0
-    [void]$headerGrid.Children.Add($bandanaTail)
+    # Twee bandana-staartjes (achter de knoop), dan de kop, dan band + knoop erover
+    New-EggShape 'System.Windows.Shapes.Rectangle' 8 26 2 28 $red -Radius 4 -Rotate -25 | Out-Null
+    New-EggShape 'System.Windows.Shapes.Rectangle' 8 20 6 34 $red -Radius 4 -Rotate 12  | Out-Null
+    New-EggShape 'System.Windows.Shapes.Ellipse'   52 48 20 2 $green | Out-Null
+    New-EggShape 'System.Windows.Shapes.Rectangle' 54 15 19 19 $red -Radius 6 | Out-Null
+    New-EggShape 'System.Windows.Shapes.Ellipse'   15 15 10 20 $red | Out-Null
 
-    # Ceintuurgesp-'R' (donker met gouden randje), lager op het lijf -- zoals op de referentiefoto
-    $badge = New-Object System.Windows.Controls.Border
-    $badge.Width = 20; $badge.Height = 20
-    $badge.CornerRadius = [System.Windows.CornerRadius]::new(10)
-    $badge.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0x3E, 0x27, 0x23))
-    $badge.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xC9, 0xA2, 0x27))
-    $badge.BorderThickness = [System.Windows.Thickness]::new(1.5)
-    $badge.HorizontalAlignment = 'Left'
-    $badge.VerticalAlignment = 'Top'
-    $badge.Margin = [System.Windows.Thickness]::new(596, 40, 0, 0)
-    $badge.Opacity = 0
-    $badgeLbl = New-Object System.Windows.Controls.TextBlock
-    $badgeLbl.Text = 'R'
-    $badgeLbl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromRgb(0xF5, 0xE6, 0xC8))
-    $badgeLbl.FontWeight = 'Bold'
-    $badgeLbl.FontSize = 11
-    $badgeLbl.HorizontalAlignment = 'Center'
-    $badgeLbl.VerticalAlignment = 'Center'
-    $badge.Child = $badgeLbl
-    [void]$headerGrid.Children.Add($badge)
+    # Ogen: wit met zwarte pupil + opgetrokken wenkbrauw (het "brutale" Raphael-kijkje)
+    $eyeL = New-EggShape 'System.Windows.Shapes.Ellipse' 13 11 28 21 $white -StrokeThickness 2
+    New-EggShape 'System.Windows.Shapes.Ellipse' 5 5 32 25 $black -StrokeThickness 0 | Out-Null
+    $eyeR = New-EggShape 'System.Windows.Shapes.Ellipse' 13 11 50 20 $white -StrokeThickness 2
+    $pupilR = New-EggShape 'System.Windows.Shapes.Ellipse' 5 5 54 24 $black -StrokeThickness 0
 
-    $wink = New-Object System.Windows.Controls.TextBlock
-    $wink.Text = [char]::ConvertFromUtf32(0x1F609)     # 😉
-    $wink.FontSize = 22
-    $wink.HorizontalAlignment = 'Left'
-    $wink.VerticalAlignment = 'Top'
-    $wink.Margin = [System.Windows.Thickness]::new(606, 12, 0, 0)
-    $wink.Opacity = 0
-    [void]$headerGrid.Children.Add($wink)
+    New-EggPath -Data 'M 26,20 Q 34,14 43,19' | Out-Null
+    New-EggPath -Data 'M 48,17 Q 57,11 66,18' | Out-Null
 
-    # Pop-in van de schildpad
+    # Glimlach
+    New-EggPath -Data 'M 34,42 Q 46,50 60,40' | Out-Null
+    New-EggPath -Data 'M 56,38 Q 60,42 62,38' -StrokeThickness 1.5 | Out-Null
+
+    # Pop-in van de hele kop
     $pop = New-Object System.Windows.Media.Animation.DoubleAnimation(0, 1, (New-Object System.Windows.Duration([TimeSpan]::FromMilliseconds(350))))
     $pop.EasingFunction = New-Object System.Windows.Media.Animation.BackEase
     $pop.EasingFunction.EasingMode = 'EaseOut'
     $scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $pop)
     $scale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $pop.Clone())
 
-    # Bandana, staartje en gesp verschijnen vlak na de schildpad
-    $badgeIn = New-Object System.Windows.Media.Animation.DoubleAnimation(0, 1, (New-Object System.Windows.Duration([TimeSpan]::FromMilliseconds(200))))
-    $badgeIn.BeginTime = [TimeSpan]::FromMilliseconds(250)
-    $bandana.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $badgeIn.Clone())
-    $bandanaTail.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $badgeIn.Clone())
-    $badge.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $badgeIn)
+    # Knipoog: rechteroog + pupil knijpen samen dicht (delen dezelfde transform) tussen 500-850ms
+    $eyeRScale = New-Object System.Windows.Media.ScaleTransform(1, 1)
+    $eyeR.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
+    $eyeR.RenderTransform = $eyeRScale
+    $pupilR.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
+    $pupilR.RenderTransform = $eyeRScale
 
-    # Knipoog: één animatie met keyframes (kort zichtbaar tussen 500-800ms), i.p.v. losse timers
     $winkAnim = New-Object System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames
-    foreach ($kf in @(@{ V = 0; T = 0 }, @{ V = 1; T = 500 }, @{ V = 1; T = 750 }, @{ V = 0; T = 800 })) {
-        [void]$winkAnim.KeyFrames.Add((New-Object System.Windows.Media.Animation.DiscreteDoubleKeyFrame($kf.V, [System.Windows.Media.Animation.KeyTime]::FromTimeSpan([TimeSpan]::FromMilliseconds($kf.T)))))
+    foreach ($kf in @(@{ V = 1; T = 0 }, @{ V = 0.08; T = 500 }, @{ V = 0.08; T = 700 }, @{ V = 1; T = 850 })) {
+        [void]$winkAnim.KeyFrames.Add((New-Object System.Windows.Media.Animation.LinearDoubleKeyFrame($kf.V, [System.Windows.Media.Animation.KeyTime]::FromTimeSpan([TimeSpan]::FromMilliseconds($kf.T)))))
     }
-    $wink.BeginAnimation([System.Windows.Controls.TextBlock]::OpacityProperty, $winkAnim)
+    $eyeRScale.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $winkAnim)
 
-    # Na 1,4s alles laten vervagen en daarna opruimen
+    # Na 1,6s vervagen en daarna in één keer opruimen
     $exit = New-Object System.Windows.Media.Animation.DoubleAnimation(1, 0, (New-Object System.Windows.Duration([TimeSpan]::FromMilliseconds(400))))
-    $exit.BeginTime = [TimeSpan]::FromMilliseconds(1400)
-    $exit.Add_Completed({
-        $headerGrid.Children.Remove($turtle)
-        $headerGrid.Children.Remove($bandana)
-        $headerGrid.Children.Remove($bandanaTail)
-        $headerGrid.Children.Remove($badge)
-        $headerGrid.Children.Remove($wink)
-    }.GetNewClosure())
-    $turtle.BeginAnimation([System.Windows.Controls.TextBlock]::OpacityProperty, $exit)
-    $bandana.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $exit.Clone())
-    $bandanaTail.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $exit.Clone())
-    $badge.BeginAnimation([System.Windows.Controls.Border]::OpacityProperty, $exit.Clone())
+    $exit.BeginTime = [TimeSpan]::FromMilliseconds(1600)
+    $exit.Add_Completed({ $headerGrid.Children.Remove($art) }.GetNewClosure())
+    $art.BeginAnimation([System.Windows.Controls.Canvas]::OpacityProperty, $exit)
 
     Write-Console "Easter egg gevonden: Raphael knipoogt en verdwijnt weer. $([char]::ConvertFromUtf32(0x1F422))" 'ok'
 }
