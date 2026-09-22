@@ -3,8 +3,8 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'6.5'
-$script:versionName    = 'Pizza Funghi'
+$script:currentVersion = [System.Version]'7.0'
+$script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie (hier aanpassen) ─────────────────────
 $script:afStorageAccount = 'staceoosupportools'
@@ -187,7 +187,7 @@ $script:githubScriptUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/
 # ── Layout constanten ─────────────────────────────────────────────
 $HDR_H       = 110   # header hoogte
 $INFO_ROW_H  = 26    # hoogte per info-rij
-$INFO_ROWS   = 8     # aantal info-rijen (automatisch meerekenen bij toevoegen)
+$INFO_ROWS   = 9     # aantal info-rijen (automatisch meerekenen bij toevoegen)
 $INFO_PAD_T  = 12    # top-marge binnenin info panel
 $INFO_PAD_B  = 48    # onderste marge (ruimte voor vernieuw-knop)
 $INFO_W      = 420   # breedte infopanel en knoppen (relatief aan scrollpanel)
@@ -594,6 +594,56 @@ $script:btnUpdate.Add_Click({
 })
 $pnlHeader.Controls.Add($script:btnUpdate)
 
+# ── Googly eye die de muiscursor volgt ────────────────────────────
+$script:eyePupilR = 6
+$script:eyeDX = 0.0
+$script:eyeDY = 0.0
+$picEye = New-Object System.Windows.Forms.PictureBox
+$picEye.Size      = New-Object System.Drawing.Size(40, 40)
+$picEye.Location  = New-Object System.Drawing.Point(266, 6)
+$picEye.BackColor = [System.Drawing.Color]::Transparent
+$picEye.add_Paint(({
+    param($s, $e)
+    $g = $e.Graphics
+    $g.SmoothingMode = 'AntiAlias'
+    $w = $picEye.Width
+    $h = $picEye.Height
+    $eyeRect = New-Object System.Drawing.Rectangle(2, 2, ($w - 4), ($h - 4))
+    $g.FillEllipse([System.Drawing.Brushes]::White, $eyeRect)
+    $penBlack = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 2)
+    $g.DrawEllipse($penBlack, $eyeRect)
+    $cx = $w / 2.0
+    $cy = $h / 2.0
+    $px = $cx + $script:eyeDX - $script:eyePupilR
+    $py = $cy + $script:eyeDY - $script:eyePupilR
+    $g.FillEllipse([System.Drawing.Brushes]::Black, $px, $py, ($script:eyePupilR * 2), ($script:eyePupilR * 2))
+    $penBlack.Dispose()
+}).GetNewClosure())
+$pnlHeader.Controls.Add($picEye)
+
+$script:timerEye = New-Object System.Windows.Forms.Timer
+$script:timerEye.Interval = 30
+$script:timerEye.Add_Tick({
+    if (-not $picEye.IsHandleCreated) { return }
+    $centerPt = New-Object System.Drawing.Point(([int]($picEye.Width / 2)), ([int]($picEye.Height / 2)))
+    $center   = $picEye.PointToScreen($centerPt)
+    $cursor   = [System.Windows.Forms.Cursor]::Position
+    $dx = $cursor.X - $center.X
+    $dy = $cursor.Y - $center.Y
+    $dist = [Math]::Sqrt($dx * $dx + $dy * $dy)
+    $maxOffset = ($picEye.Width / 2.0) - $script:eyePupilR - 4
+    if ($dist -gt 0) {
+        $scale = [Math]::Min($dist, $maxOffset) / $dist
+        $script:eyeDX = $dx * $scale
+        $script:eyeDY = $dy * $scale
+    } else {
+        $script:eyeDX = 0.0
+        $script:eyeDY = 0.0
+    }
+    $picEye.Invalidate()
+})
+$script:timerEye.Start()
+
 # ── Footer (alvast aanmaken, inhoud komt verderop) ────────────────
 $FTR_H = 30
 $pnlFooter = New-Object System.Windows.Forms.Panel
@@ -710,6 +760,7 @@ $rowNet    = New-InfoRow $pnlInfo $rowY[4]
 $rowHP     = New-InfoRow $pnlInfo $rowY[5]
 $rowLaptop = New-InfoRow $pnlInfo $rowY[6]
 $rowWifi   = New-InfoRow $pnlInfo $rowY[7]
+$rowSerial = New-InfoRow $pnlInfo $rowY[8]
 
 # Overall status label – groot symbool rechts in het info panel
 $lblStatus = New-Object System.Windows.Forms.Label
@@ -1552,6 +1603,22 @@ function Display-WifiAdapter {
     }
 }
 
+function Display-SerialNumber {
+    try {
+        $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
+        if (-not $serial) { $serial = 'ONBEKEND' }
+        $rowSerial.Label.Text      = "Serienummer: $serial"
+        $rowSerial.Label.ForeColor = $clrSubText
+        $rowSerial.Icon.Image      = New-CheckBitmap $clrAccent
+        $script:deviceSerial = $serial
+    } catch {
+        $rowSerial.Label.Text      = 'Serienummer: onbekend'
+        $rowSerial.Label.ForeColor = $clrSubText
+        $rowSerial.Icon.Image      = $null
+        $script:deviceSerial = 'ONBEKEND'
+    }
+}
+
 function Display-AllGoodThumb {
     if ($script:eggThumbActive) { return }
     if ($script:okActivation -and $script:okTpm -and $script:okSecureBoot -and $script:okInternet) {
@@ -1573,6 +1640,7 @@ function Update-InfoPanel {
     Display-HPBloatware
     Display-LaptopType
     Display-WifiAdapter
+    Display-SerialNumber
     Display-AllGoodThumb
 }
 
@@ -1665,6 +1733,7 @@ function Export-RapportPDF {
             @{ Label = $rowHP.Label.Text;     OK = ($script:hpBloatFound.Count -eq 0) }
             @{ Label = $rowLaptop.Label.Text; OK = $null }
             @{ Label = $rowWifi.Label.Text;   OK = $script:okWifi }
+            @{ Label = $rowSerial.Label.Text; OK = $null }
         )
         Bloat    = @($script:hpBloatFound)
         HPIA     = (Get-HPIASummary)
