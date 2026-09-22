@@ -156,20 +156,19 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# ── Modern kleurenpalet (flat design) ─────────────────────────────
-$clrBg        = [System.Drawing.Color]::FromArgb(244, 245, 247)    # Lichte achtergrond
+# ── Modern kleurenpalet (offwit + EOO blauw, uit het logo gesampled) ─
+$clrBg        = [System.Drawing.Color]::FromArgb(250, 249, 246)    # Offwit achtergrond
 $clrCard      = [System.Drawing.Color]::FromArgb(255, 255, 255)    # Kaart/paneel achtergrond
-$clrBorder    = [System.Drawing.Color]::FromArgb(224, 227, 232)    # Subtiele randkleur
-$clrAccent    = [System.Drawing.Color]::FromArgb(13, 148, 136)     # Modern teal (EOO merkkleur)
-$clrAccentDark= [System.Drawing.Color]::FromArgb(15, 118, 110)     # Donkerder teal (hover/actief)
-$clrAccentDim = [System.Drawing.Color]::FromArgb(30, 41, 59)       # Hoofdtekst (slate)
-$clrSubText   = [System.Drawing.Color]::FromArgb(71, 85, 105)      # Subtekst (slate)
+$clrBorder    = [System.Drawing.Color]::FromArgb(228, 225, 219)    # Subtiele warme randkleur
+$clrAccent    = [System.Drawing.Color]::FromArgb(32, 138, 208)     # EOO blauw (logo-kleur)
+$clrAccentDark= [System.Drawing.Color]::FromArgb(3, 23, 61)        # EOO donkerblauw/navy (logo-kleur)
+$clrAccentDim = [System.Drawing.Color]::FromArgb(3, 23, 61)        # Hoofdtekst (EOO donkerblauw)
+$clrSubText   = [System.Drawing.Color]::FromArgb(100, 108, 122)    # Subtekst (blauwgrijs)
 
 $clrBtnBg     = [System.Drawing.Color]::FromArgb(255, 255, 255)    # Witte knop
-$clrBtnHover  = [System.Drawing.Color]::FromArgb(13, 148, 136)     # Teal hover
+$clrBtnHover  = [System.Drawing.Color]::FromArgb(32, 138, 208)     # EOO blauw hover
 $clrBtnHoverFg= [System.Drawing.Color]::FromArgb(255, 255, 255)    # Wit hover tekst
 $clrDanger    = [System.Drawing.Color]::FromArgb(220, 38, 38)      # Modern rood
-$clrGreen     = [System.Drawing.Color]::FromArgb(22, 163, 74)      # Modern groen
 
 $fntTitle   = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
 $fntSub     = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
@@ -412,8 +411,8 @@ function New-ThumbBitmap {
     $bmp = New-Object System.Drawing.Bitmap(24, 24)
     $g   = [System.Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'
-    $brush = New-Object System.Drawing.SolidBrush($clrGreen)
-    $pen   = New-Object System.Drawing.Pen($clrGreen, 1.5)
+    $brush = New-Object System.Drawing.SolidBrush($clrAccent)
+    $pen   = New-Object System.Drawing.Pen($clrAccent, 1.5)
     # Duim omhoog (vereenvoudigd): handpalm + duim
     # Handpalm
     $g.FillRectangle($brush, 6, 11, 12, 10)
@@ -462,6 +461,33 @@ function New-IconBox {
     return $pb
 }
 
+# Geeft een knop een moderne teal-gradient achtergrond (i.p.v. effen kleur), via
+# BackgroundImage zodat de standaard knoptekst/-icoon gewoon boven de gradient blijft staan.
+function Set-ButtonGradient {
+    param($Btn, [System.Drawing.Color]$ColorA, [System.Drawing.Color]$ColorB)
+    $Btn.FlatStyle = 'Flat'
+    $Btn.FlatAppearance.BorderSize = 0
+    $Btn.ForeColor = [System.Drawing.Color]::White
+
+    $redraw = {
+        if ($Btn.Width -le 0 -or $Btn.Height -le 0) { return }
+        $bmp   = New-Object System.Drawing.Bitmap($Btn.Width, $Btn.Height)
+        $g     = [System.Drawing.Graphics]::FromImage($bmp)
+        $rect  = New-Object System.Drawing.Rectangle(0, 0, $bmp.Width, $bmp.Height)
+        $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $ColorA, $ColorB, [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal)
+        $g.FillRectangle($brush, $rect)
+        $brush.Dispose(); $g.Dispose()
+        if ($Btn.BackgroundImage) { $Btn.BackgroundImage.Dispose() }
+        $Btn.BackgroundImage       = $bmp
+        $Btn.BackgroundImageLayout = 'Stretch'
+    }
+    $redraw = $redraw.GetNewClosure()
+    & $redraw
+    $Btn.Add_Resize($redraw)
+    $Btn.Add_MouseEnter({ $this.ForeColor = [System.Drawing.Color]::White })
+    $Btn.Add_MouseLeave({ $this.ForeColor = [System.Drawing.Color]::White })
+}
+
 # ── Form ─────────────────────────────────────────────────────────
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = 'EOO - Windows Installatie Tool'
@@ -480,6 +506,15 @@ $pnlHeader.Location  = New-Object System.Drawing.Point(0, 0)
 $pnlHeader.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, $HDR_H)
 $pnlHeader.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 $pnlHeader.BackColor = $clrAccentDark
+$pnlHeader.add_Paint(({
+    param($s, $e)
+    $g    = $e.Graphics
+    $rect = [System.Drawing.Rectangle]::new(0, 0, [Math]::Max(1, $pnlHeader.Width), $pnlHeader.Height)
+    $mode = [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal
+    $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $clrAccentDark, $clrAccent, $mode)
+    $g.FillRectangle($brush, $rect)
+    $brush.Dispose()
+}).GetNewClosure())
 $form.Controls.Add($pnlHeader)
 
 # Dunne moderne accentlijn onder de header
@@ -532,19 +567,13 @@ $pnlHeader.Controls.Add($lblVersion)
 $script:btnUpdate = New-Object System.Windows.Forms.Button
 $script:btnUpdate.Text      = 'Update beschikbaar'
 $script:btnUpdate.Font      = $fntSub
-$script:btnUpdate.ForeColor = [System.Drawing.Color]::White
-$script:btnUpdate.BackColor = $clrGreen
-$script:btnUpdate.FlatStyle = 'Flat'
-$script:btnUpdate.FlatAppearance.BorderSize         = 0
-$script:btnUpdate.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(21, 128, 61)
 $script:btnUpdate.Location  = New-Object System.Drawing.Point(760, 58)
 $script:btnUpdate.Size      = New-Object System.Drawing.Size(162, 24)
 $script:btnUpdate.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
-$script:btnUpdate.Cursor    = [System.Windows.Forms.Cursors]::Default
+$script:btnUpdate.Cursor    = [System.Windows.Forms.Cursors]::Hand
 $script:btnUpdate.TextAlign = 'MiddleCenter'
 $script:btnUpdate.Visible   = $false
-$script:btnUpdate.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(21, 128, 61) })
-$script:btnUpdate.Add_MouseLeave({ $this.BackColor = $clrGreen })
+Set-ButtonGradient $script:btnUpdate $clrAccent $clrAccentDark
 $script:btnUpdate.Add_Click({
     $script:btnUpdate.Enabled = $false
     $script:btnUpdate.Text    = 'Bezig...'
@@ -578,53 +607,63 @@ $script:btnUpdate.Add_Click({
 })
 $pnlHeader.Controls.Add($script:btnUpdate)
 
-# ── Googly eye die de muiscursor volgt ────────────────────────────
-$script:eyePupilR = 6
-$script:eyeDX = 0.0
-$script:eyeDY = 0.0
-$picEye = New-Object System.Windows.Forms.PictureBox
-$picEye.Size      = New-Object System.Drawing.Size(40, 40)
-$picEye.Location  = New-Object System.Drawing.Point(266, 6)
-$picEye.BackColor = [System.Drawing.Color]::Transparent
-$picEye.add_Paint({
-    param($s, $e)
-    $g = $e.Graphics
-    $g.SmoothingMode = 'AntiAlias'
-    $w = $picEye.Width
-    $h = $picEye.Height
-    $eyeRect = New-Object System.Drawing.Rectangle(2, 2, ($w - 4), ($h - 4))
-    $g.FillEllipse([System.Drawing.Brushes]::White, $eyeRect)
-    $penBlack = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 2)
-    $g.DrawEllipse($penBlack, $eyeRect)
-    $cx = $w / 2.0
-    $cy = $h / 2.0
-    $px = $cx + $script:eyeDX - $script:eyePupilR
-    $py = $cy + $script:eyeDY - $script:eyePupilR
-    $g.FillEllipse([System.Drawing.Brushes]::Black, $px, $py, ($script:eyePupilR * 2), ($script:eyePupilR * 2))
-    $penBlack.Dispose()
-})
-$pnlHeader.Controls.Add($picEye)
+# ── Googly eyes die de muiscursor volgen ──────────────────────────
+function New-GooglyEye {
+    param([System.Windows.Forms.Control]$Parent, [int]$X, [int]$Y, [int]$Size = 36, [int]$PupilRadius = 5)
+    $eye = New-Object System.Windows.Forms.PictureBox
+    $eye.Size      = New-Object System.Drawing.Size($Size, $Size)
+    $eye.Location  = New-Object System.Drawing.Point($X, $Y)
+    $eye.BackColor = [System.Drawing.Color]::Transparent
+    $eye.Tag       = @{ DX = 0.0; DY = 0.0; PupilR = $PupilRadius }
+    $eye.add_Paint({
+        param($s, $e)
+        $g = $e.Graphics
+        $g.SmoothingMode = 'AntiAlias'
+        $w = $s.Width
+        $h = $s.Height
+        $eyeRect = New-Object System.Drawing.Rectangle(2, 2, ($w - 4), ($h - 4))
+        $g.FillEllipse([System.Drawing.Brushes]::White, $eyeRect)
+        $penBlack = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 2)
+        $g.DrawEllipse($penBlack, $eyeRect)
+        $state = $s.Tag
+        $r  = $state.PupilR
+        $cx = $w / 2.0
+        $cy = $h / 2.0
+        $px = $cx + $state.DX - $r
+        $py = $cy + $state.DY - $r
+        $g.FillEllipse([System.Drawing.Brushes]::Black, $px, $py, ($r * 2), ($r * 2))
+        $penBlack.Dispose()
+    })
+    $Parent.Controls.Add($eye)
+    return $eye
+}
+
+$script:googlyEyes = [System.Collections.Generic.List[System.Windows.Forms.PictureBox]]::new()
+$script:googlyEyes.Add((New-GooglyEye -Parent $pnlHeader -X 266 -Y 8 -Size 36))
+$script:googlyEyes.Add((New-GooglyEye -Parent $pnlHeader -X 310 -Y 8 -Size 36))
 
 $script:timerEye = New-Object System.Windows.Forms.Timer
 $script:timerEye.Interval = 30
 $script:timerEye.Add_Tick({
-    if (-not $picEye.IsHandleCreated) { return }
-    $centerPt = New-Object System.Drawing.Point(([int]($picEye.Width / 2)), ([int]($picEye.Height / 2)))
-    $center   = $picEye.PointToScreen($centerPt)
-    $cursor   = [System.Windows.Forms.Cursor]::Position
-    $dx = $cursor.X - $center.X
-    $dy = $cursor.Y - $center.Y
-    $dist = [Math]::Sqrt($dx * $dx + $dy * $dy)
-    $maxOffset = ($picEye.Width / 2.0) - $script:eyePupilR - 4
-    if ($dist -gt 0) {
-        $scale = [Math]::Min($dist, $maxOffset) / $dist
-        $script:eyeDX = $dx * $scale
-        $script:eyeDY = $dy * $scale
-    } else {
-        $script:eyeDX = 0.0
-        $script:eyeDY = 0.0
+    $cursor = [System.Windows.Forms.Cursor]::Position
+    foreach ($eye in $script:googlyEyes) {
+        if (-not $eye.IsHandleCreated) { continue }
+        $centerPt = New-Object System.Drawing.Point(([int]($eye.Width / 2)), ([int]($eye.Height / 2)))
+        $center   = $eye.PointToScreen($centerPt)
+        $dx = $cursor.X - $center.X
+        $dy = $cursor.Y - $center.Y
+        $dist = [Math]::Sqrt($dx * $dx + $dy * $dy)
+        $maxOffset = ($eye.Width / 2.0) - $eye.Tag.PupilR - 4
+        if ($dist -gt 0) {
+            $scale = [Math]::Min($dist, $maxOffset) / $dist
+            $eye.Tag.DX = $dx * $scale
+            $eye.Tag.DY = $dy * $scale
+        } else {
+            $eye.Tag.DX = 0.0
+            $eye.Tag.DY = 0.0
+        }
+        $eye.Invalidate()
     }
-    $picEye.Invalidate()
 })
 $script:timerEye.Start()
 
@@ -648,7 +687,7 @@ $splitMain.Panel1MinSize = 420
 $splitMain.Panel2MinSize = 200
 $splitMain.BackColor     = [System.Drawing.Color]::FromArgb(128, 128, 128)
 $splitMain.Panel1.BackColor = $clrBg
-$splitMain.Panel2.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
+$splitMain.Panel2.BackColor = $clrAccentDark
 $form.Controls.Add($splitMain)
 
 # SplitterDistance pas instellen nadat het form getoond is (juiste breedte)
@@ -959,8 +998,9 @@ $txtKey.CharacterCasing = 'Upper'
 $txtKey.Text        = ''
 $script:leftPanel.Controls.Add($txtKey)
 
-$btnActivateKey = New-EOOButton 'Activeren met sleutel' 22 ($SECT_Y + 350) 420 34 $clrBtnBg $clrGreen ([System.Drawing.Color]::White)
-Add-BtnIcon $btnActivateKey (New-KeyBitmap $clrAccent)
+$btnActivateKey = New-EOOButton 'Activeren met sleutel' 22 ($SECT_Y + 350) 420 34
+Add-BtnIcon $btnActivateKey (New-KeyBitmap ([System.Drawing.Color]::White))
+Set-ButtonGradient $btnActivateKey $clrAccent $clrAccentDark
 $script:fullWidthCtrls.Add($btnActivateKey)
 $btnActivateKey.Add_Click({
     $key = $txtKey.Text.Trim()
@@ -1326,7 +1366,7 @@ $splitMain.Panel2.Controls.Add($lblConsoleHdr)
 $txtConsole = New-Object System.Windows.Forms.RichTextBox
 $txtConsole.Location    = New-Object System.Drawing.Point(0, 22)
 $txtConsole.Size        = New-Object System.Drawing.Size($splitMain.Panel2.Width, ($splitMain.Panel2.Height - 22))
-$txtConsole.BackColor   = [System.Drawing.Color]::FromArgb(15, 23, 42)
+$txtConsole.BackColor   = $clrAccentDark
 $txtConsole.ForeColor   = [System.Drawing.Color]::FromArgb(203, 213, 225)
 $txtConsole.Font        = New-Object System.Drawing.Font("Consolas", 9)
 $txtConsole.ReadOnly    = $true
@@ -1342,7 +1382,7 @@ function Write-Console {
     $txtConsole.SelectionStart = $txtConsole.TextLength
     $txtConsole.SelectionLength = 0
     switch ($Type) {
-        'ok'    { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(74, 222, 128) }
+        'ok'    { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(96, 190, 240) }
         'error' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(248, 113, 113) }
         'start' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(250, 204, 21) }
         default { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(203, 213, 225) }
@@ -1382,8 +1422,8 @@ function Set-InfoRow {
     param($Row, [string]$Text, [bool]$OK)
     $Row.Label.Text = $Text
     if ($OK) {
-        $Row.Label.ForeColor = $clrGreen
-        $Row.Icon.Image      = New-CheckBitmap $clrGreen
+        $Row.Label.ForeColor = $clrAccent
+        $Row.Icon.Image      = New-CheckBitmap $clrAccent
     } else {
         $Row.Label.ForeColor = $clrDanger
         $Row.Icon.Image      = New-BigExclBitmap
@@ -1582,7 +1622,7 @@ function Display-AllGoodThumb {
     if ($script:eggThumbActive) { return }
     if ($script:okActivation -and $script:okTpm -and $script:okSecureBoot -and $script:okInternet) {
         $lblStatus.Text      = [System.Char]::ConvertFromUtf32(0x1F44D)
-        $lblStatus.ForeColor = $clrGreen
+        $lblStatus.ForeColor = $clrAccent
     } else {
         $lblStatus.Text      = '!'
         $lblStatus.Font      = New-Object System.Drawing.Font("Segoe UI Emoji", 52, [System.Drawing.FontStyle]::Regular)
