@@ -3,7 +3,7 @@
 #  Opslaan als: UTF-8 with BOM  (VS Code: "Save with Encoding" > UTF-8 BOM)
 # ════════════════════════════════════════════════════════════════
 # ── Versie (hier aanpassen bij nieuwe release) ───────────────────
-$script:currentVersion = [System.Version]'7.0'
+$script:currentVersion = [System.Version]'7.1'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie (hier aanpassen) ─────────────────────
@@ -154,24 +154,28 @@ function Write-TempScript {
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-# EnableVisualStyles weggelaten voor Windows 95 opmaak
+[System.Windows.Forms.Application]::EnableVisualStyles()
 
-$clrBg        = [System.Drawing.Color]::FromArgb(192, 192, 192)   # Win95 grijs
-$clrAccent    = [System.Drawing.Color]::FromArgb(0, 0, 128)        # Win95 navy (titelbalk)
-$clrAccentDim = [System.Drawing.Color]::FromArgb(0, 0, 0)          # Zwart
-$clrSubText   = [System.Drawing.Color]::FromArgb(0, 0, 0)          # Zwart
+# ── Modern kleurenpalet (flat design) ─────────────────────────────
+$clrBg        = [System.Drawing.Color]::FromArgb(244, 245, 247)    # Lichte achtergrond
+$clrCard      = [System.Drawing.Color]::FromArgb(255, 255, 255)    # Kaart/paneel achtergrond
+$clrBorder    = [System.Drawing.Color]::FromArgb(224, 227, 232)    # Subtiele randkleur
+$clrAccent    = [System.Drawing.Color]::FromArgb(13, 148, 136)     # Modern teal (EOO merkkleur)
+$clrAccentDark= [System.Drawing.Color]::FromArgb(15, 118, 110)     # Donkerder teal (hover/actief)
+$clrAccentDim = [System.Drawing.Color]::FromArgb(30, 41, 59)       # Hoofdtekst (slate)
+$clrSubText   = [System.Drawing.Color]::FromArgb(71, 85, 105)      # Subtekst (slate)
 
-$clrBtnBg     = [System.Drawing.Color]::FromArgb(192, 192, 192)    # Win95 grijs knop
-$clrBtnHover  = [System.Drawing.Color]::FromArgb(0, 0, 128)        # Win95 navy hover
+$clrBtnBg     = [System.Drawing.Color]::FromArgb(255, 255, 255)    # Witte knop
+$clrBtnHover  = [System.Drawing.Color]::FromArgb(13, 148, 136)     # Teal hover
 $clrBtnHoverFg= [System.Drawing.Color]::FromArgb(255, 255, 255)    # Wit hover tekst
-$clrDanger    = [System.Drawing.Color]::FromArgb(192, 0, 0)        # Win95 rood
-$clrGreen     = [System.Drawing.Color]::FromArgb(0, 128, 0)        # Win95 groen
+$clrDanger    = [System.Drawing.Color]::FromArgb(220, 38, 38)      # Modern rood
+$clrGreen     = [System.Drawing.Color]::FromArgb(22, 163, 74)      # Modern groen
 
-$fntTitle   = New-Object System.Drawing.Font("Microsoft Sans Serif", 12, [System.Drawing.FontStyle]::Bold)
-$fntSub     = New-Object System.Drawing.Font("Microsoft Sans Serif", 8,  [System.Drawing.FontStyle]::Regular)
-$fntLabel   = New-Object System.Drawing.Font("Microsoft Sans Serif", 8,  [System.Drawing.FontStyle]::Regular)
-$fntSection = New-Object System.Drawing.Font("Microsoft Sans Serif", 8,  [System.Drawing.FontStyle]::Bold)
-$fntBtn     = New-Object System.Drawing.Font("Microsoft Sans Serif", 8,  [System.Drawing.FontStyle]::Regular)
+$fntTitle   = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+$fntSub     = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
+$fntLabel   = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
+$fntSection = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Bold)
+$fntBtn     = New-Object System.Drawing.Font("Segoe UI", 9,  [System.Drawing.FontStyle]::Regular)
 
 # EOO logo laden vanuit GitHub
 $script:logoImage = $null
@@ -475,35 +479,16 @@ $pnlHeader = New-Object System.Windows.Forms.Panel
 $pnlHeader.Location  = New-Object System.Drawing.Point(0, 0)
 $pnlHeader.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, $HDR_H)
 $pnlHeader.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlHeader.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 128)
-$pnlHeader.add_Paint(({
-    param($s, $e)
-    $g    = $e.Graphics
-    $w    = [int]$pnlHeader.Width
-    $h    = ([int]$pnlHeader.Height) - 4
-    $rect  = [System.Drawing.Rectangle]::new(0, 0, $w, $h)
-    $clrL  = [System.Drawing.Color]::FromArgb(0, 128, 128)
-    $clrR  = [System.Drawing.Color]::FromArgb(0, 160, 160)
-    $mode  = [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal
-    $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $clrL, $clrR, $mode)
-    $g.FillRectangle($brush, $rect)
-    $brush.Dispose()
-}).GetNewClosure())
+$pnlHeader.BackColor = $clrAccentDark
 $form.Controls.Add($pnlHeader)
 
-# Onderste rand van header: grijs scheidslijn (Win95 stijl)
+# Dunne moderne accentlijn onder de header
 $pnlAccentBar = New-Object System.Windows.Forms.Panel
-$pnlAccentBar.Location  = New-Object System.Drawing.Point(0, ($HDR_H - 4))
-$pnlAccentBar.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, 2)
+$pnlAccentBar.Location  = New-Object System.Drawing.Point(0, ($HDR_H - 3))
+$pnlAccentBar.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, 3)
 $pnlAccentBar.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlAccentBar.BackColor = [System.Drawing.Color]::FromArgb(128, 128, 128)
+$pnlAccentBar.BackColor = $clrAccent
 $pnlHeader.Controls.Add($pnlAccentBar)
-$pnlAccentBar2 = New-Object System.Windows.Forms.Panel
-$pnlAccentBar2.Location  = New-Object System.Drawing.Point(0, ($HDR_H - 2))
-$pnlAccentBar2.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, 2)
-$pnlAccentBar2.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlAccentBar2.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
-$pnlHeader.Controls.Add($pnlAccentBar2)
 
 # Logo PictureBox
 $pbHeaderLogo = New-Object System.Windows.Forms.PictureBox
@@ -527,7 +512,7 @@ $pnlHeader.Controls.Add($pbHeaderLogo)
 
 $lblSubTitle = New-Object System.Windows.Forms.Label
 $lblSubTitle.Text      = 'Windows Installatie Tool'
-$lblSubTitle.Font      = New-Object System.Drawing.Font("Microsoft Sans Serif", 9, [System.Drawing.FontStyle]::Regular)
+$lblSubTitle.Font      = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Regular)
 $lblSubTitle.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
 $lblSubTitle.BackColor = [System.Drawing.Color]::Transparent
 $lblSubTitle.Location  = New-Object System.Drawing.Point(252, 50)
@@ -537,7 +522,7 @@ $pnlHeader.Controls.Add($lblSubTitle)
 $lblVersion = New-Object System.Windows.Forms.Label
 $lblVersion.Text      = "v$script:currentVersion - $script:versionName"
 $lblVersion.Font      = $fntSub
-$lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
+$lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(203, 213, 225)
 $lblVersion.BackColor = [System.Drawing.Color]::Transparent
 $lblVersion.Location  = New-Object System.Drawing.Point(780, 88)
 $lblVersion.AutoSize  = $true
@@ -548,19 +533,18 @@ $script:btnUpdate = New-Object System.Windows.Forms.Button
 $script:btnUpdate.Text      = 'Update beschikbaar'
 $script:btnUpdate.Font      = $fntSub
 $script:btnUpdate.ForeColor = [System.Drawing.Color]::White
-$script:btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 0)
+$script:btnUpdate.BackColor = $clrGreen
 $script:btnUpdate.FlatStyle = 'Flat'
-$script:btnUpdate.FlatAppearance.BorderColor        = [System.Drawing.Color]::FromArgb(0, 80, 0)
-$script:btnUpdate.FlatAppearance.BorderSize         = 1
-$script:btnUpdate.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 160, 0)
+$script:btnUpdate.FlatAppearance.BorderSize         = 0
+$script:btnUpdate.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(21, 128, 61)
 $script:btnUpdate.Location  = New-Object System.Drawing.Point(760, 58)
 $script:btnUpdate.Size      = New-Object System.Drawing.Size(162, 24)
 $script:btnUpdate.Anchor    = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $script:btnUpdate.Cursor    = [System.Windows.Forms.Cursors]::Default
 $script:btnUpdate.TextAlign = 'MiddleCenter'
 $script:btnUpdate.Visible   = $false
-$script:btnUpdate.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(0, 160, 0) })
-$script:btnUpdate.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::FromArgb(0, 128, 0) })
+$script:btnUpdate.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(21, 128, 61) })
+$script:btnUpdate.Add_MouseLeave({ $this.BackColor = $clrGreen })
 $script:btnUpdate.Add_Click({
     $script:btnUpdate.Enabled = $false
     $script:btnUpdate.Text    = 'Bezig...'
@@ -602,7 +586,7 @@ $picEye = New-Object System.Windows.Forms.PictureBox
 $picEye.Size      = New-Object System.Drawing.Size(40, 40)
 $picEye.Location  = New-Object System.Drawing.Point(266, 6)
 $picEye.BackColor = [System.Drawing.Color]::Transparent
-$picEye.add_Paint(({
+$picEye.add_Paint({
     param($s, $e)
     $g = $e.Graphics
     $g.SmoothingMode = 'AntiAlias'
@@ -618,7 +602,7 @@ $picEye.add_Paint(({
     $py = $cy + $script:eyeDY - $script:eyePupilR
     $g.FillEllipse([System.Drawing.Brushes]::Black, $px, $py, ($script:eyePupilR * 2), ($script:eyePupilR * 2))
     $penBlack.Dispose()
-}).GetNewClosure())
+})
 $pnlHeader.Controls.Add($picEye)
 
 $script:timerEye = New-Object System.Windows.Forms.Timer
@@ -650,7 +634,7 @@ $pnlFooter = New-Object System.Windows.Forms.Panel
 $pnlFooter.Size      = New-Object System.Drawing.Size($form.ClientSize.Width, $FTR_H)
 $pnlFooter.Location  = New-Object System.Drawing.Point(0, ($form.ClientSize.Height - $FTR_H))
 $pnlFooter.Anchor    = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$pnlFooter.BackColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
+$pnlFooter.BackColor = $clrCard
 $form.Controls.Add($pnlFooter)
 
 # ── SplitContainer: linker scrollpanel | rechter consolepanel ────
@@ -664,7 +648,7 @@ $splitMain.Panel1MinSize = 420
 $splitMain.Panel2MinSize = 200
 $splitMain.BackColor     = [System.Drawing.Color]::FromArgb(128, 128, 128)
 $splitMain.Panel1.BackColor = $clrBg
-$splitMain.Panel2.BackColor = [System.Drawing.Color]::FromArgb(0, 0, 0)
+$splitMain.Panel2.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
 $form.Controls.Add($splitMain)
 
 # SplitterDistance pas instellen nadat het form getoond is (juiste breedte)
@@ -705,29 +689,16 @@ $script:leftPanel.Add_Resize({ Invoke-LayoutResize })
 $pnlInfo = New-Object System.Windows.Forms.Panel
 $pnlInfo.Size      = New-Object System.Drawing.Size($INFO_W, $INFO_H)
 $pnlInfo.Location  = New-Object System.Drawing.Point(22, $INFO_Y)
-$pnlInfo.BackColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
+$pnlInfo.BackColor = $clrCard
 $pnlInfo.add_Paint(({
     param($s, $e)
     $g = $e.Graphics
     $w = [int]$pnlInfo.Width - 1
     $h = [int]$pnlInfo.Height - 1
-    # Win95 sunken 3D rand (zoals een tekstvak of sunken panel)
-    $penDarkOuter  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(128, 128, 128), 1)
-    $penBlackInner = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 0, 0), 1)
-    $penWhiteOuter = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, 255, 255), 1)
-    $penLightInner = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(223, 223, 223), 1)
-    # Buitenste rand: grijs boven/links, wit rechts/onder
-    $g.DrawLine($penDarkOuter,  0, 0, $w, 0)
-    $g.DrawLine($penDarkOuter,  0, 0, 0, $h)
-    $g.DrawLine($penWhiteOuter, $w, 0, $w, $h)
-    $g.DrawLine($penWhiteOuter, 0, $h, $w, $h)
-    # Binnenste rand: zwart boven/links, lichtgrijs rechts/onder
-    $g.DrawLine($penBlackInner, 1, 1, $w-1, 1)
-    $g.DrawLine($penBlackInner, 1, 1, 1, $h-1)
-    $g.DrawLine($penLightInner, $w-1, 1, $w-1, $h-1)
-    $g.DrawLine($penLightInner, 1, $h-1, $w-1, $h-1)
-    $penDarkOuter.Dispose(); $penBlackInner.Dispose()
-    $penWhiteOuter.Dispose(); $penLightInner.Dispose()
+    # Moderne flat kaart: dunne subtiele rand rondom
+    $penBorder = New-Object System.Drawing.Pen($clrBorder, 1)
+    $g.DrawRectangle($penBorder, 0, 0, $w, $h)
+    $penBorder.Dispose()
 }).GetNewClosure())
 $script:leftPanel.Controls.Add($pnlInfo)
 $script:fullWidthCtrls.Add($pnlInfo)
@@ -814,20 +785,20 @@ function New-EOOButton {
     $btn = New-Object System.Windows.Forms.Button
     $btn.Text      = $Text
     $btn.Font      = $fntBtn
-    $btn.ForeColor = [System.Drawing.Color]::FromArgb(0, 0, 0)
-    $btn.BackColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
+    $btn.ForeColor = $clrAccentDim
+    $btn.BackColor = $BgColor
     $btn.FlatStyle = 'Flat'
-    $btn.FlatAppearance.BorderColor        = [System.Drawing.Color]::FromArgb(0, 0, 0)
+    $btn.FlatAppearance.BorderColor        = $clrBorder
     $btn.FlatAppearance.BorderSize         = 1
-    $btn.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 0, 128)
+    $btn.FlatAppearance.MouseOverBackColor = $HoverBg
     $btn.Location  = New-Object System.Drawing.Point($X, $Y)
     $btn.Size      = New-Object System.Drawing.Size($W, $H)
-    $btn.Cursor    = [System.Windows.Forms.Cursors]::Default
+    $btn.Cursor    = [System.Windows.Forms.Cursors]::Hand
     $btn.TextAlign = 'MiddleLeft'
-    $btn.Padding   = New-Object System.Windows.Forms.Padding(4, 0, 0, 0)
+    $btn.Padding   = New-Object System.Windows.Forms.Padding(10, 0, 0, 0)
 
     $capturedFg  = [System.Drawing.Color]::FromArgb($HoverFg.A, $HoverFg.R, $HoverFg.G, $HoverFg.B)
-    $capturedDim = [System.Drawing.Color]::FromArgb(0, 0, 0)
+    $capturedDim = [System.Drawing.Color]::FromArgb($clrAccentDim.A, $clrAccentDim.R, $clrAccentDim.G, $clrAccentDim.B)
     $btn.Add_MouseEnter([scriptblock]::Create('$this.ForeColor = [System.Drawing.Color]::FromArgb(' + $capturedFg.A + ',' + $capturedFg.R + ',' + $capturedFg.G + ',' + $capturedFg.B + ')'))
     $btn.Add_MouseLeave([scriptblock]::Create('$this.ForeColor = [System.Drawing.Color]::FromArgb(' + $capturedDim.A + ',' + $capturedDim.R + ',' + $capturedDim.G + ',' + $capturedDim.B + ')'))
     $script:leftPanel.Controls.Add($btn)
@@ -847,24 +818,18 @@ function New-SectionLabel {
     $lbl = New-Object System.Windows.Forms.Label
     $lbl.Text      = $Text
     $lbl.Font      = $fntSection
-    $lbl.ForeColor = [System.Drawing.Color]::FromArgb(0, 0, 0)
+    $lbl.ForeColor = $clrAccentDim
     $lbl.BackColor = [System.Drawing.Color]::Transparent
     $lbl.Location  = New-Object System.Drawing.Point(22, $Y)
     $lbl.AutoSize  = $true
     $script:leftPanel.Controls.Add($lbl)
-    # Win95 raised scheidslijn (grijs boven, wit onder)
+    # Dunne moderne scheidslijn
     $line = New-Object System.Windows.Forms.Panel
-    $line.BackColor = [System.Drawing.Color]::FromArgb(128, 128, 128)
-    $line.Location  = New-Object System.Drawing.Point(22, ($Y + 16))
+    $line.BackColor = $clrBorder
+    $line.Location  = New-Object System.Drawing.Point(22, ($Y + 20))
     $line.Size      = New-Object System.Drawing.Size(420, 1)
     $script:leftPanel.Controls.Add($line)
     $script:sectionDividers.Add($line)
-    $line2 = New-Object System.Windows.Forms.Panel
-    $line2.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
-    $line2.Location  = New-Object System.Drawing.Point(22, ($Y + 17))
-    $line2.Size      = New-Object System.Drawing.Size(420, 1)
-    $script:leftPanel.Controls.Add($line2)
-    $script:sectionDividers.Add($line2)
 }
 
 # ── Sectie: Systeem ──────────────────────────────────────────────
@@ -983,10 +948,10 @@ $lblKeyInput.AutoSize  = $true
 $script:leftPanel.Controls.Add($lblKeyInput)
 
 $txtKey = New-Object System.Windows.Forms.TextBox
-$txtKey.Font        = New-Object System.Drawing.Font("Courier New", 9)
-$txtKey.ForeColor   = [System.Drawing.Color]::FromArgb(0, 0, 0)
-$txtKey.BackColor   = [System.Drawing.Color]::FromArgb(255, 255, 255)
-$txtKey.BorderStyle = 'Fixed3D'
+$txtKey.Font        = New-Object System.Drawing.Font("Consolas", 10)
+$txtKey.ForeColor   = $clrAccentDim
+$txtKey.BackColor   = $clrCard
+$txtKey.BorderStyle = 'FixedSingle'
 $txtKey.MaxLength   = 29
 $txtKey.Location    = New-Object System.Drawing.Point(22, ($SECT_Y + 310))
 $txtKey.Size        = New-Object System.Drawing.Size(290, 26)
@@ -1351,8 +1316,8 @@ $script:btnExportPDF.Add_Click({
 # ── Console output panel (rechterkolom – in splitMain.Panel2) ────
 $lblConsoleHdr = New-Object System.Windows.Forms.Label
 $lblConsoleHdr.Text      = 'Log'
-$lblConsoleHdr.Font      = New-Object System.Drawing.Font("Microsoft Sans Serif", 8, [System.Drawing.FontStyle]::Bold)
-$lblConsoleHdr.ForeColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
+$lblConsoleHdr.Font      = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblConsoleHdr.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
 $lblConsoleHdr.BackColor = [System.Drawing.Color]::Transparent
 $lblConsoleHdr.Location  = New-Object System.Drawing.Point(4, 4)
 $lblConsoleHdr.AutoSize  = $true
@@ -1361,9 +1326,9 @@ $splitMain.Panel2.Controls.Add($lblConsoleHdr)
 $txtConsole = New-Object System.Windows.Forms.RichTextBox
 $txtConsole.Location    = New-Object System.Drawing.Point(0, 22)
 $txtConsole.Size        = New-Object System.Drawing.Size($splitMain.Panel2.Width, ($splitMain.Panel2.Height - 22))
-$txtConsole.BackColor   = [System.Drawing.Color]::FromArgb(0, 0, 0)
-$txtConsole.ForeColor   = [System.Drawing.Color]::FromArgb(192, 192, 192)
-$txtConsole.Font        = New-Object System.Drawing.Font("Courier New", 8)
+$txtConsole.BackColor   = [System.Drawing.Color]::FromArgb(15, 23, 42)
+$txtConsole.ForeColor   = [System.Drawing.Color]::FromArgb(203, 213, 225)
+$txtConsole.Font        = New-Object System.Drawing.Font("Consolas", 9)
 $txtConsole.ReadOnly    = $true
 $txtConsole.BorderStyle = 'None'
 $txtConsole.ScrollBars  = 'Vertical'
@@ -1377,32 +1342,26 @@ function Write-Console {
     $txtConsole.SelectionStart = $txtConsole.TextLength
     $txtConsole.SelectionLength = 0
     switch ($Type) {
-        'ok'    { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(0, 255, 0) }
-        'error' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(255, 85, 85) }
-        'start' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(255, 255, 85) }
-        default { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(192, 192, 192) }
+        'ok'    { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(74, 222, 128) }
+        'error' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(248, 113, 113) }
+        'start' { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(250, 204, 21) }
+        default { $txtConsole.SelectionColor = [System.Drawing.Color]::FromArgb(203, 213, 225) }
     }
     $txtConsole.AppendText("[$time] $Message`n")
     $txtConsole.ScrollToCaret()
 }
 
 # ── Footer inhoud ────────────────────────────────────────────────
-# Win95 footer: grijs boven (schaduw), wit daarboven (highlight) = raised rand
 $pnlFooterLine = New-Object System.Windows.Forms.Panel
 $pnlFooterLine.Dock      = 'Top'
 $pnlFooterLine.Height    = 1
-$pnlFooterLine.BackColor = [System.Drawing.Color]::FromArgb(128, 128, 128)
+$pnlFooterLine.BackColor = $clrBorder
 $pnlFooter.Controls.Add($pnlFooterLine)
-$pnlFooterLine2 = New-Object System.Windows.Forms.Panel
-$pnlFooterLine2.Dock      = 'Top'
-$pnlFooterLine2.Height    = 1
-$pnlFooterLine2.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
-$pnlFooter.Controls.Add($pnlFooterLine2)
 
 $lblFooter = New-Object System.Windows.Forms.Label
 $lblFooter.Text      = 'Easy Office Online  |  eoo.nl'
 $lblFooter.Font      = $fntSub
-$lblFooter.ForeColor = [System.Drawing.Color]::FromArgb(0, 0, 0)
+$lblFooter.ForeColor = $clrSubText
 $lblFooter.BackColor = [System.Drawing.Color]::Transparent
 $lblFooter.Location  = New-Object System.Drawing.Point(8, 8)
 $lblFooter.AutoSize  = $true
@@ -1411,7 +1370,7 @@ $pnlFooter.Controls.Add($lblFooter)
 $lblDate = New-Object System.Windows.Forms.Label
 $lblDate.Text      = (Get-Date -Format 'dd-MM-yyyy')
 $lblDate.Font      = $fntSub
-$lblDate.ForeColor = [System.Drawing.Color]::FromArgb(0, 0, 0)
+$lblDate.ForeColor = $clrSubText
 $lblDate.BackColor = [System.Drawing.Color]::Transparent
 $lblDate.Location  = New-Object System.Drawing.Point(($pnlFooter.Width - 100), 8)
 $lblDate.AutoSize  = $true
@@ -1913,19 +1872,19 @@ function Export-RapportPDF {
 $btnRefreshInfo = New-Object System.Windows.Forms.Button
 $btnRefreshInfo.Text      = 'Vernieuwen'
 $btnRefreshInfo.Font      = $fntSub
-$btnRefreshInfo.ForeColor = [System.Drawing.Color]::FromArgb(0, 0, 0)
-$btnRefreshInfo.BackColor = [System.Drawing.Color]::FromArgb(192, 192, 192)
+$btnRefreshInfo.ForeColor = $clrAccentDim
+$btnRefreshInfo.BackColor = $clrCard
 $btnRefreshInfo.FlatStyle = 'Flat'
-$btnRefreshInfo.FlatAppearance.BorderColor        = [System.Drawing.Color]::FromArgb(0, 0, 0)
+$btnRefreshInfo.FlatAppearance.BorderColor        = $clrBorder
 $btnRefreshInfo.FlatAppearance.BorderSize         = 1
-$btnRefreshInfo.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 0, 128)
+$btnRefreshInfo.FlatAppearance.MouseOverBackColor = $clrAccent
 $btnRefreshInfo.Location  = New-Object System.Drawing.Point(278, ($INFO_PAD_T + $INFO_ROWS * $INFO_ROW_H + 8))
 $btnRefreshInfo.Size      = New-Object System.Drawing.Size(134, 24)
 $btnRefreshInfo.Anchor    = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
-$btnRefreshInfo.Cursor    = [System.Windows.Forms.Cursors]::Default
+$btnRefreshInfo.Cursor    = [System.Windows.Forms.Cursors]::Hand
 $btnRefreshInfo.TextAlign = 'MiddleCenter'
 $btnRefreshInfo.Add_MouseEnter({ $this.ForeColor = [System.Drawing.Color]::White })
-$btnRefreshInfo.Add_MouseLeave({ $this.ForeColor = [System.Drawing.Color]::FromArgb(0, 0, 0) })
+$btnRefreshInfo.Add_MouseLeave({ $this.ForeColor = $clrAccentDim })
 $btnRefreshInfo.Add_Click({ Update-InfoPanel })
 $pnlInfo.Controls.Add($btnRefreshInfo)
 
