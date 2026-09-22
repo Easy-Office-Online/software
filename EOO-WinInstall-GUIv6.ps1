@@ -1402,7 +1402,7 @@ function Display-ActivationStatus {
 
 function Display-TpmStatus {
     try {
-        $tpm = Get-WmiObject -Namespace 'Root\CIMv2\Security\MicrosoftTpm' -Class Win32_Tpm
+        $tpm = Get-CimInstance -Namespace 'Root\CIMv2\Security\MicrosoftTpm' -ClassName Win32_Tpm
         if ($tpm) {
             $specVersion = $tpm.SpecVersion
             if ($specVersion) {
