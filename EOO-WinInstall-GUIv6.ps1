@@ -511,7 +511,7 @@ $pnlHeader.add_Paint(({
     $g    = $e.Graphics
     $rect = [System.Drawing.Rectangle]::new(0, 0, [Math]::Max(1, $pnlHeader.Width), $pnlHeader.Height)
     $mode = [System.Drawing.Drawing2D.LinearGradientMode]::Horizontal
-    $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $clrAccentDark, $clrAccent, $mode)
+    $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect, $clrAccent, $clrAccentDark, $mode)
     $g.FillRectangle($brush, $rect)
     $brush.Dispose()
 }).GetNewClosure())
