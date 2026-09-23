@@ -8,7 +8,7 @@
 #  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
 
-$script:currentVersion = [System.Version]'7.1'
+$script:currentVersion = [System.Version]'7.2'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie ───────────────────────────────────────
@@ -617,12 +617,14 @@ function Start-EOOJob {
         [scriptblock]$OnError,
         [scriptblock]$OnComplete
     )
-    $script:eooJobs[$Key] = @{ Job = (Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList) }
+    $entry = @{ Job = (Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList) }
+    $script:eooJobs[$Key] = $entry
 
     $timer = New-Object System.Windows.Threading.DispatcherTimer
     $timer.Interval = [TimeSpan]::FromMilliseconds(500)
     $timer.Add_Tick({
-        $job = $script:eooJobs[$Key].Job
+        $job = $entry.Job
+        if (-not $job) { $timer.Stop(); return }
         foreach ($line in ($job.ChildJobs[0].Output.ReadAll())) { & $OnOutput $line }
         foreach ($e in ($job.ChildJobs[0].Error.ReadAll())) { if ($OnError) { & $OnError $e } }
         if ($job.State -in 'Completed', 'Failed') {
@@ -630,11 +632,11 @@ function Start-EOOJob {
             $succeeded = $job.State -eq 'Completed'
             $reason = if (-not $succeeded) { $job.ChildJobs[0].JobStateInfo.Reason.Message } else { $null }
             Remove-Job $job -Force
-            $script:eooJobs.Remove($Key)
+            if ($script:eooJobs) { $script:eooJobs.Remove($Key) }
             if ($OnComplete) { & $OnComplete $succeeded $reason }
         }
     }.GetNewClosure())
-    $script:eooJobs[$Key].Timer = $timer
+    $entry.Timer = $timer
     $timer.Start()
 }
 
@@ -980,7 +982,9 @@ $btnHPIA.Add_Click({
         Write-Output '    Download geslaagd.'
 
         Write-Output '[4/5] Setup uitpakken...'
-        Start-Process -FilePath $filepath -ArgumentList '/s /e' -Wait
+        # Nieuwere HPIA-wrapper (hpsoftpaqwrapper) extraheert niet meer standaard naar
+        # C:\SWSetup zonder expliciete /f doelmap; exitcode 1168 is normale "wrapper noise".
+        Start-Process -FilePath $filepath -ArgumentList '/s /e /f "C:\SWSetup"' -Wait
 
         $timeout = 120; $elapsed = 0; $found = $null
         do {
