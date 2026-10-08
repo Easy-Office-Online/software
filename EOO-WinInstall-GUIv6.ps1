@@ -8,7 +8,7 @@
 #  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
 
-$script:currentVersion = [System.Version]'7.2'
+$script:currentVersion = [System.Version]'7.1'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie ───────────────────────────────────────
@@ -348,6 +348,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                     <TextBlock Text="Productsleutel" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}" Margin="0,10,0,6" FontSize="12"/>
                     <TextBox x:Name="TxtKey" Style="{StaticResource KeyInput}" MaxLength="29" Margin="0,0,0,8" HorizontalAlignment="Left" Width="300"/>
                     <Button x:Name="BtnActivateKey" Content="Activeren met sleutel" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnBackupKey" Content="Productsleutel back-uppen naar Azure" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
 
                     <!-- Drivers -->
                     <TextBlock Text="Drivers" Style="{StaticResource SectionTitle}"/>
@@ -421,6 +422,7 @@ $btnAW           = $window.FindName('BtnAW')
 $btnWifi         = $window.FindName('BtnWifi')
 $txtKey          = $window.FindName('TxtKey')
 $btnActivateKey  = $window.FindName('BtnActivateKey')
+$btnBackupKey    = $window.FindName('BtnBackupKey')
 $btnLSU          = $window.FindName('BtnLSU')
 $btnHPIA         = $window.FindName('BtnHPIA')
 $btnHWIDOvr      = $window.FindName('BtnHWIDOvr')
@@ -442,6 +444,7 @@ $iconPaths = @{
     Cloud    = 'M19.35,10.04C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.04C2.34,8.36 0,10.91 0,14A6,6 0 0,0 6,20H19A5,5 0 0,0 24,15C24,12.36 21.95,10.22 19.35,10.04Z'
     Download = 'M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z'
     Play     = 'M8,5V19L19,12L8,5Z'
+    Upload   = 'M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z'
 }
 function Get-IconGeometry { param([string]$Name) [System.Windows.Media.Geometry]::Parse($iconPaths[$Name]) }
 
@@ -453,6 +456,7 @@ $btnDM.Tag          = Get-IconGeometry Gear
 $btnAW.Tag          = Get-IconGeometry Key
 $btnWifi.Tag        = Get-IconGeometry Wifi
 $btnActivateKey.Tag = Get-IconGeometry Key
+$btnBackupKey.Tag   = Get-IconGeometry Upload
 $btnLSU.Tag         = Get-IconGeometry Play
 $btnHPIA.Tag        = Get-IconGeometry Play
 $btnHWIDOvr.Tag     = Get-IconGeometry Download
@@ -876,6 +880,104 @@ $btnActivateKey.Add_Click({
         param($succeeded, $reason)
         if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' } else { Update-InfoPanel }
         $btnActivateKey.IsEnabled = $true
+    }
+})
+
+# Productsleutel back-up: OEM-sleutel uit firmware (OA3) + geinstalleerde
+# sleutel (gedecodeerd uit DigitalProductId) naar X:\Productsleutels\<serienummer>_<tijd>.txt
+$btnBackupKey.Add_Click({
+    $btnBackupKey.IsEnabled = $false
+    Write-Console 'Productsleutel back-uppen naar Azure Files...' 'start'
+    Start-EOOJob -Key 'KeyBackup' -ArgumentList @($script:afStorageAccount, $script:afShareName, $script:afKey) -ScriptBlock {
+        param($sa, $sn, $k)
+
+        function ConvertFrom-DigitalProductId {
+            param([byte[]]$Id)
+            $offset = 52
+            $chars  = 'BCDFGHJKMPQRTVWXY2346789'
+            $isWin8 = [int][math]::Floor($Id[66] / 6) -band 1
+            $Id[66] = $Id[66] -band 0xF7
+            $key = ''; $last = 0
+            for ($i = 24; $i -ge 0; $i--) {
+                $cur = 0
+                for ($j = 14; $j -ge 0; $j--) {
+                    $cur = $cur * 256 + $Id[$j + $offset]
+                    $Id[$j + $offset] = [byte][math]::Floor($cur / 24)
+                    $cur = $cur % 24
+                }
+                $key = $chars[$cur] + $key
+                $last = $cur
+            }
+            if ($isWin8 -eq 1) { $key = $key.Substring(1).Insert($last, 'N') }
+            return ($key -replace '(.{5})(?!$)', '$1-')
+        }
+
+        $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
+        if (-not $serial) { $serial = 'ONBEKEND' }
+        Write-Output "[1/3] Serienummer: $serial"
+
+        $oemKey = (Get-CimInstance SoftwareLicensingService).OA3xOriginalProductKey
+        $oemDesc = (Get-CimInstance SoftwareLicensingService).OA3xOriginalProductKeyDescription
+        $installedKey = $null
+        try {
+            $dpid = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name DigitalProductId -ErrorAction Stop).DigitalProductId
+            if ($dpid) { $installedKey = ConvertFrom-DigitalProductId -Id $dpid }
+        } catch {}
+        $lic = Get-CimInstance -Query "SELECT Name, Description, PartialProductKey, LicenseStatus FROM SoftwareLicensingProduct WHERE ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL" |
+               Select-Object -First 1
+        $os = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+
+        if (-not $oemKey -and -not $installedKey) { throw 'Geen productsleutel gevonden (geen OEM-sleutel in firmware en geen geinstalleerde sleutel).' }
+        Write-Output "[2/3] OEM-sleutel (firmware): $(if ($oemKey) { $oemKey } else { 'niet aanwezig' })"
+        Write-Output "      Geinstalleerde sleutel : $(if ($installedKey) { $installedKey } else { 'niet uit te lezen' })"
+
+        $statusNames = @{ 0 = 'Niet gelicentieerd'; 1 = 'Gelicentieerd'; 2 = 'OOB-grace'; 3 = 'OOT-grace'; 4 = 'Non-genuine grace'; 5 = 'Notificatie'; 6 = 'Extended grace' }
+        $lines = @(
+            'EOO - Windows productsleutel back-up'
+            "Datum                 : $(Get-Date -Format 'dd-MM-yyyy HH:mm:ss')"
+            "Serienummer           : $serial"
+            "Computernaam          : $env:COMPUTERNAME"
+            "Fabrikant / model     : $((Get-CimInstance Win32_ComputerSystem).Manufacturer) $((Get-CimInstance Win32_ComputerSystem).Model)"
+            "Windows editie        : $($os.EditionID) $($os.DisplayVersion) (Build $($os.CurrentBuildNumber))"
+            ''
+            "OEM-sleutel (firmware): $(if ($oemKey) { $oemKey } else { '-' })"
+            "OEM-sleutel type      : $(if ($oemDesc) { $oemDesc } else { '-' })"
+            "Geinstalleerde sleutel: $(if ($installedKey) { $installedKey } else { '-' })"
+            "Partial key (laatste 5): $(if ($lic) { $lic.PartialProductKey } else { '-' })"
+            "Licentiekanaal        : $(if ($lic) { $lic.Description } else { '-' })"
+            "Licentiestatus        : $(if ($lic) { $statusNames[[int]$lic.LicenseStatus] } else { '-' })"
+            ''
+            'Let op: bij een digitale licentie / KMS is de geinstalleerde sleutel een generieke sleutel.'
+        )
+
+        $safeSerial = $serial -replace '[\\/:*?"<>|]', '_'
+        $fn = "${safeSerial}_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+        $localPath = Join-Path $env:TEMP $fn
+        Set-Content -Path $localPath -Value $lines -Encoding UTF8
+
+        Write-Output '[3/3] Uploaden naar Azure Files...'
+        if (-not (Test-Path 'X:\')) {
+            Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
+                Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+            }
+            try {
+                New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
+            } catch { throw "Azure Files koppelen mislukt. Controleer poort 445. ($_)" }
+        }
+        $keyDir = 'X:\Productsleutels'
+        if (-not (Test-Path $keyDir)) { New-Item -ItemType Directory -Path $keyDir | Out-Null }
+        Copy-Item -Path $localPath -Destination "$keyDir\$fn" -Force
+        Remove-Item $localPath -Force -ErrorAction SilentlyContinue
+        Write-Output "[OK] Productsleutel opgeslagen in Azure Files: Productsleutels\$fn"
+    } -OnOutput {
+        param($line)
+        if ($line -match '^\[OK\]') { Write-Console $line 'ok' } else { Write-Console $line 'info' }
+    } -OnError {
+        param($e) Write-Console "FOUT: $($e.Exception.Message)" 'error'
+    } -OnComplete {
+        param($succeeded, $reason)
+        if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' }
+        $btnBackupKey.IsEnabled = $true
     }
 })
 
