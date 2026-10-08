@@ -8,7 +8,7 @@
 #  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
 
-$script:currentVersion = [System.Version]'7.1'
+$script:currentVersion = [System.Version]'7.2'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie ───────────────────────────────────────
@@ -365,7 +365,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                     <!-- Azure opslag -->
                     <TextBlock Text="Azure opslag" Style="{StaticResource SectionTitle}"/>
                     <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
-                    <Button x:Name="BtnAzureMount" Content="Azure opslag koppelen (X:)" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnAzureMount" Content="Azure opslag openen" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
 
                     <!-- Rapport -->
                     <TextBlock Text="Rapport" Style="{StaticResource SectionTitle}"/>
@@ -1139,51 +1139,35 @@ $btnHWIDApp.Add_Click({
 })
 
 # ── Sectie: Azure opslag ────────────────────────────────────────────
-# Zie EOO-WinInstall-GUIv6.ps1 voor de uitleg waarom de koppeling via
-# een apart, zichtbaar cmd-venster (Shell.Application) loopt i.p.v.
-# vanuit dit elevated proces: anders landt X: in de verkeerde
-# tokencontext en is 'ie niet zichtbaar in de Verkenner van de
-# ingelogde gebruiker (bv. defaultuser0 tijdens Autopilot ESP).
+# Geen schijfkoppeling meer: we slaan alleen de credentials op met
+# cmdkey en openen de UNC-map direct in de Verkenner. Dit loopt via
+# Shell.Application zodat cmdkey en explorer in de context van de
+# ingelogde gebruiker draaien i.p.v. in dit elevated proces (bv.
+# defaultuser0 tijdens Autopilot ESP).
 function Start-AzureMount {
     $sa = $script:afStorageAccount
     $sn = $script:afShareName
     $k  = $script:afKey
 
-    if (Get-PSDrive -Name X -ErrorAction SilentlyContinue) { Remove-PSDrive -Name X -Force -ErrorAction SilentlyContinue }
-
     $cmdContent = @"
 @echo off
-title Azure opslag koppelen (X:)
-net use X: /delete /y >nul 2>&1
 cmdkey /add:"$sa.file.core.windows.net" /user:"localhost\$sa" /pass:"$k" >nul
-echo Bezig met koppelen van \\$sa.file.core.windows.net\$sn aan X: ...
-net use X: "\\$sa.file.core.windows.net\$sn" /persistent:yes
-if %errorlevel% neq 0 (
-    echo.
-    echo Koppelen mislukt met foutcode %errorlevel%.
-) else (
-    echo.
-    echo Azure opslag gekoppeld op X:
-    start explorer.exe X:\
-)
-echo.
-pause
+start "" explorer.exe "\\$sa.file.core.windows.net\$sn"
 "@
-    $cmdPath = Write-TempScript -Content $cmdContent -Filename 'EOO_MapAzureDrive.cmd'
+    $cmdPath = Write-TempScript -Content $cmdContent -Filename 'EOO_OpenAzureShare.cmd'
 
     $shell = New-Object -ComObject Shell.Application
-    $shell.ShellExecute('cmd.exe', "/c `"$cmdPath`"", '', 'open', 1)
+    $shell.ShellExecute('cmd.exe', "/c `"$cmdPath`"", '', 'open', 0)
     [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
 
-    Write-Console '  Venster geopend om X:\ te koppelen - volg de voortgang daar.' 'info'
-    Write-Console '  Koppeling is persistent (blijft ook na herstart bestaan).' 'info'
+    Write-Console "  Map \\$sa.file.core.windows.net\$sn geopend in de Verkenner." 'ok'
     Write-Console '─────────────────────────────' 'info'
     $btnAzureMount.IsEnabled = $true
 }
 
 $btnAzureMount.Add_Click({
     $btnAzureMount.IsEnabled = $false
-    Write-Console '─── Azure opslag koppelen ───' 'start'
+    Write-Console '─── Azure opslag openen ───' 'start'
     Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
