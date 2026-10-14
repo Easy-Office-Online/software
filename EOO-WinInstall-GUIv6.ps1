@@ -8,7 +8,7 @@
 #  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
 
-$script:currentVersion = [System.Version]'7.2'
+$script:currentVersion = [System.Version]'7.3'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie ───────────────────────────────────────
@@ -348,6 +348,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                     <TextBlock Text="Productsleutel" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}" Margin="0,10,0,6" FontSize="12"/>
                     <TextBox x:Name="TxtKey" Style="{StaticResource KeyInput}" MaxLength="29" Margin="0,0,0,8" HorizontalAlignment="Left" Width="300"/>
                     <Button x:Name="BtnActivateKey" Content="Activeren met sleutel" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
+                    <Button x:Name="BtnActivateOem" Content="Activeren met OEM-sleutel (firmware)" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8" Visibility="Collapsed"/>
                     <Button x:Name="BtnBackupKey" Content="Productsleutel back-uppen naar Azure" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
 
                     <!-- Drivers -->
@@ -422,6 +423,7 @@ $btnAW           = $window.FindName('BtnAW')
 $btnWifi         = $window.FindName('BtnWifi')
 $txtKey          = $window.FindName('TxtKey')
 $btnActivateKey  = $window.FindName('BtnActivateKey')
+$btnActivateOem  = $window.FindName('BtnActivateOem')
 $btnBackupKey    = $window.FindName('BtnBackupKey')
 $btnLSU          = $window.FindName('BtnLSU')
 $btnHPIA         = $window.FindName('BtnHPIA')
@@ -456,6 +458,7 @@ $btnDM.Tag          = Get-IconGeometry Gear
 $btnAW.Tag          = Get-IconGeometry Key
 $btnWifi.Tag        = Get-IconGeometry Wifi
 $btnActivateKey.Tag = Get-IconGeometry Key
+$btnActivateOem.Tag = Get-IconGeometry Key
 $btnBackupKey.Tag   = Get-IconGeometry Upload
 $btnLSU.Tag         = Get-IconGeometry Play
 $btnHPIA.Tag        = Get-IconGeometry Play
@@ -668,10 +671,11 @@ function New-InfoRow {
     [void]$row.Children.Add($icon)
     [void]$row.Children.Add($label)
     [void]$infoRows.Children.Add($row)
-    $script:infoRowMap[$Key] = @{ Icon = $icon; Label = $label }
+    $script:infoRowMap[$Key] = @{ Row = $row; Icon = $icon; Label = $label }
 }
-'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
+'OemKey', 'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
     ForEach-Object { New-InfoRow $_ }
+$script:infoRowMap['OemKey'].Row.Visibility = 'Collapsed'
 
 function Set-InfoRow {
     param([string]$Key, [string]$Text, [bool]$OK, [switch]$Neutral)
@@ -689,8 +693,22 @@ function Set-InfoRow {
 # ── Systeemchecks (zelfde logica als WinForms v6) ──────────────────
 $script:okActivation = $false; $script:okTpm = $false; $script:okSecureBoot = $false
 $script:okInternet   = $false; $script:okWifi = $false; $script:hpBloatFound = @()
+$script:oemKey       = $null
 
 function Update-InfoPanel {
+    # OEM-sleutel uit firmware (OA3) -- alleen tonen indien aanwezig
+    try { $script:oemKey = (Get-CimInstance SoftwareLicensingService).OA3xOriginalProductKey } catch { $script:oemKey = $null }
+    if ($script:oemKey) {
+        Set-InfoRow 'OemKey' "OEM-sleutel: $script:oemKey" $true -Neutral
+        $script:infoRowMap['OemKey'].Label.FontFamily = 'Consolas'
+        $script:infoRowMap['OemKey'].Label.Foreground = $window.FindResource('BrushAccentDark')
+        $script:infoRowMap['OemKey'].Row.Visibility = 'Visible'
+        $btnActivateOem.Visibility = 'Visible'
+    } else {
+        $script:infoRowMap['OemKey'].Row.Visibility = 'Collapsed'
+        $btnActivateOem.Visibility = 'Collapsed'
+    }
+
     try {
         $osInfo = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
         $pn = $osInfo.ProductName; $dv = $osInfo.DisplayVersion; $bn = [int]$osInfo.CurrentBuildNumber
@@ -880,7 +898,17 @@ $btnActivateKey.Add_Click({
         param($succeeded, $reason)
         if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' } else { Update-InfoPanel }
         $btnActivateKey.IsEnabled = $true
+        $btnActivateOem.IsEnabled = $true
     }
+})
+
+# Activeren met OEM-sleutel: vult het sleutelveld en hergebruikt de activatie-flow
+$btnActivateOem.Add_Click({
+    if (-not $script:oemKey) { Write-Console 'Geen OEM-sleutel in firmware gevonden.' 'error'; return }
+    $btnActivateOem.IsEnabled = $false
+    $txtKey.Text = $script:oemKey
+    $btnActivateKey.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+    if ($btnActivateKey.IsEnabled) { $btnActivateOem.IsEnabled = $true }  # validatie mislukt -> geen job gestart
 })
 
 # Productsleutel back-up: OEM-sleutel uit firmware (OA3) + geinstalleerde
