@@ -675,7 +675,6 @@ function New-InfoRow {
 }
 'OemKey', 'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
     ForEach-Object { New-InfoRow $_ }
-$script:infoRowMap['OemKey'].Row.Visibility = 'Collapsed'
 
 function Set-InfoRow {
     param([string]$Key, [string]$Text, [bool]$OK, [switch]$Neutral)
@@ -696,16 +695,20 @@ $script:okInternet   = $false; $script:okWifi = $false; $script:hpBloatFound = @
 $script:oemKey       = $null
 
 function Update-InfoPanel {
-    # OEM-sleutel uit firmware (OA3) -- alleen tonen indien aanwezig
+    # OEM-sleutel uit firmware (OA3)
     try { $script:oemKey = (Get-CimInstance SoftwareLicensingService).OA3xOriginalProductKey } catch { $script:oemKey = $null }
+    $oemRow = $script:infoRowMap['OemKey']
     if ($script:oemKey) {
         Set-InfoRow 'OemKey' "OEM-sleutel: $script:oemKey" $true -Neutral
-        $script:infoRowMap['OemKey'].Label.FontFamily = 'Consolas'
-        $script:infoRowMap['OemKey'].Label.Foreground = $window.FindResource('BrushAccentDark')
-        $script:infoRowMap['OemKey'].Row.Visibility = 'Visible'
+        $oemRow.Label.FontFamily = 'Consolas'
+        $oemRow.Label.Foreground = $window.FindResource('BrushAccentDark')
         $btnActivateOem.Visibility = 'Visible'
     } else {
-        $script:infoRowMap['OemKey'].Row.Visibility = 'Collapsed'
+        Set-InfoRow 'OemKey' 'Geen OEM-sleutel in firmware gevonden' $true -Neutral
+        $oemRow.Icon.Text = '-'
+        $oemRow.Icon.Foreground = $window.FindResource('BrushSubText')
+        $oemRow.Label.ClearValue([System.Windows.Controls.TextBlock]::FontFamilyProperty)
+        $oemRow.Label.Foreground = $window.FindResource('BrushSubText')
         $btnActivateOem.Visibility = 'Collapsed'
     }
 
@@ -1278,6 +1281,7 @@ function Export-RapportPDF {
         Serial = $serial; Computer = $env:COMPUTERNAME; Date = Get-Date -Format 'dd-MM-yyyy HH:mm:ss'
         Version = $script:currentVersion; Logo = $script:logoImageGdi
         Checks = @(
+            @{ Label = $script:infoRowMap['OemKey'].Label.Text;      OK = $null }
             @{ Label = $script:infoRowMap['Windows'].Label.Text;     OK = $null }
             @{ Label = $script:infoRowMap['Activatie'].Label.Text;   OK = $script:okActivation }
             @{ Label = $script:infoRowMap['Tpm'].Label.Text;         OK = $script:okTpm }
