@@ -8,7 +8,7 @@
 #  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
 
-$script:currentVersion = [System.Version]'7.3'
+$script:currentVersion = [System.Version]'7.4'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie ───────────────────────────────────────
@@ -349,6 +349,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                     <TextBox x:Name="TxtKey" Style="{StaticResource KeyInput}" MaxLength="29" Margin="0,0,0,8" HorizontalAlignment="Left" Width="300"/>
                     <Button x:Name="BtnActivateKey" Content="Activeren met sleutel" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
                     <Button x:Name="BtnActivateOem" Content="Activeren met OEM-sleutel (firmware)" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8" Visibility="Collapsed"/>
+                    <Button x:Name="BtnActivateComplies" Content="Activeren met Complies-sleutel (Azure)" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8" Visibility="Collapsed"/>
                     <Button x:Name="BtnBackupKey" Content="Productsleutel back-uppen naar Azure" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
 
                     <!-- Drivers -->
@@ -424,6 +425,7 @@ $btnWifi         = $window.FindName('BtnWifi')
 $txtKey          = $window.FindName('TxtKey')
 $btnActivateKey  = $window.FindName('BtnActivateKey')
 $btnActivateOem  = $window.FindName('BtnActivateOem')
+$btnActivateComplies = $window.FindName('BtnActivateComplies')
 $btnBackupKey    = $window.FindName('BtnBackupKey')
 $btnLSU          = $window.FindName('BtnLSU')
 $btnHPIA         = $window.FindName('BtnHPIA')
@@ -459,6 +461,7 @@ $btnAW.Tag          = Get-IconGeometry Key
 $btnWifi.Tag        = Get-IconGeometry Wifi
 $btnActivateKey.Tag = Get-IconGeometry Key
 $btnActivateOem.Tag = Get-IconGeometry Key
+$btnActivateComplies.Tag = Get-IconGeometry Key
 $btnBackupKey.Tag   = Get-IconGeometry Upload
 $btnLSU.Tag         = Get-IconGeometry Play
 $btnHPIA.Tag        = Get-IconGeometry Play
@@ -673,7 +676,7 @@ function New-InfoRow {
     [void]$infoRows.Children.Add($row)
     $script:infoRowMap[$Key] = @{ Row = $row; Icon = $icon; Label = $label }
 }
-'OemKey', 'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
+'OemKey', 'CompliesKey', 'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
     ForEach-Object { New-InfoRow $_ }
 
 function Set-InfoRow {
@@ -795,8 +798,79 @@ function Update-InfoPanel {
     }
 }
 
+# Complies-sleutel: serienummer opzoeken in de CSV('s) op Azure Files
+# (Productsleutels\Complies keys\*.csv). Draait als job zodat het laden
+# van de share/CSV de GUI niet blokkeert.
+$script:compliesKey = $null
+function Update-CompliesKey {
+    if ($script:eooJobs.ContainsKey('CompliesLookup')) { return }
+    $script:compliesKey = $null
+    $btnActivateComplies.Visibility = 'Collapsed'
+    $cRow = $script:infoRowMap['CompliesKey']
+    Set-InfoRow 'CompliesKey' 'Complies-sleutel: zoeken in Azure...' $true -Neutral
+    $cRow.Icon.Text = '-'
+    $cRow.Icon.Foreground = $window.FindResource('BrushSubText')
+    $cRow.Label.ClearValue([System.Windows.Controls.TextBlock]::FontFamilyProperty)
+    $cRow.Label.Foreground = $window.FindResource('BrushSubText')
+
+    try { $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim() } catch { $serial = $null }
+    if (-not $serial) {
+        Set-InfoRow 'CompliesKey' 'Complies-sleutel: serienummer onbekend' $false
+        return
+    }
+
+    $script:compliesResult = $null
+    Start-EOOJob -Key 'CompliesLookup' -ArgumentList @($script:afStorageAccount, $script:afShareName, $script:afKey, $serial) -ScriptBlock {
+        param($sa, $sn, $k, $serial)
+        if (-not (Test-Path 'X:\')) {
+            Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
+                Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+            }
+            try {
+                New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
+            } catch { throw "Azure Files koppelen mislukt. Controleer poort 445. ($_)" }
+        }
+        $dir = 'X:\Productsleutels\Complies keys'
+        $csvs = @(Get-ChildItem -Path $dir -Filter '*.csv' -File -ErrorAction SilentlyContinue)
+        if (-not $csvs) { throw "Geen CSV gevonden in Productsleutels\Complies keys." }
+        foreach ($csv in $csvs) {
+            $hit = Import-Csv -Path $csv.FullName -Delimiter ';' |
+                Where-Object { $_.Serienummer.Trim() -eq $serial -or ($_.serialbios -and $_.serialbios.Trim() -eq $serial) } |
+                Where-Object { $_.key -match '^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$' } |
+                Select-Object -Last 1
+            if ($hit) {
+                [pscustomobject]@{ Key = $hit.key.Trim(); OS = $hit.osname; File = $csv.Name }
+                return
+            }
+        }
+    } -OnOutput {
+        param($line) $script:compliesResult = $line
+    } -OnComplete {
+        param($succeeded, $reason)
+        $cRow = $script:infoRowMap['CompliesKey']
+        if (-not $succeeded) {
+            Set-InfoRow 'CompliesKey' 'Complies-sleutel: Azure niet bereikbaar' $false
+            Write-Console "Complies-sleutel opzoeken mislukt: $reason" 'error'
+            return
+        }
+        if ($script:compliesResult) {
+            $script:compliesKey = $script:compliesResult.Key
+            Set-InfoRow 'CompliesKey' "Complies-sleutel: $script:compliesKey" $true -Neutral
+            $cRow.Label.FontFamily = 'Consolas'
+            $cRow.Label.Foreground = $window.FindResource('BrushAccentDark')
+            $btnActivateComplies.Visibility = 'Visible'
+            Write-Console "Complies-sleutel gevonden voor dit serienummer ($($script:compliesResult.OS), $($script:compliesResult.File))." 'ok'
+        } else {
+            Set-InfoRow 'CompliesKey' 'Geen Complies-sleutel voor dit serienummer' $true -Neutral
+            $cRow.Icon.Text = '-'
+            $cRow.Icon.Foreground = $window.FindResource('BrushSubText')
+        }
+    }
+}
+
 $txtRefresh.Add_MouseLeftButtonUp({
     Update-InfoPanel
+    Update-CompliesKey
     Write-Console 'Infopaneel vernieuwd.' 'info'
 })
 
@@ -902,6 +976,7 @@ $btnActivateKey.Add_Click({
         if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' } else { Update-InfoPanel }
         $btnActivateKey.IsEnabled = $true
         $btnActivateOem.IsEnabled = $true
+        $btnActivateComplies.IsEnabled = $true
     }
 })
 
@@ -912,6 +987,15 @@ $btnActivateOem.Add_Click({
     $txtKey.Text = $script:oemKey
     $btnActivateKey.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
     if ($btnActivateKey.IsEnabled) { $btnActivateOem.IsEnabled = $true }  # validatie mislukt -> geen job gestart
+})
+
+# Activeren met Complies-sleutel: zelfde flow als OEM, sleutel komt uit de Azure-CSV
+$btnActivateComplies.Add_Click({
+    if (-not $script:compliesKey) { Write-Console 'Geen Complies-sleutel gevonden voor dit serienummer.' 'error'; return }
+    $btnActivateComplies.IsEnabled = $false
+    $txtKey.Text = $script:compliesKey
+    $btnActivateKey.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+    if ($btnActivateKey.IsEnabled) { $btnActivateComplies.IsEnabled = $true }  # validatie mislukt -> geen job gestart
 })
 
 # Productsleutel back-up: OEM-sleutel uit firmware (OA3) + geinstalleerde
@@ -1282,6 +1366,7 @@ function Export-RapportPDF {
         Version = $script:currentVersion; Logo = $script:logoImageGdi
         Checks = @(
             @{ Label = $script:infoRowMap['OemKey'].Label.Text;      OK = $null }
+            @{ Label = $script:infoRowMap['CompliesKey'].Label.Text; OK = $null }
             @{ Label = $script:infoRowMap['Windows'].Label.Text;     OK = $null }
             @{ Label = $script:infoRowMap['Activatie'].Label.Text;   OK = $script:okActivation }
             @{ Label = $script:infoRowMap['Tpm'].Label.Text;         OK = $script:okTpm }
@@ -1433,6 +1518,7 @@ $btnExportPDF.Add_Click({
 $window.Add_Loaded({
     Write-Console 'Systeemcontrole uitgevoerd.' 'info'
     Update-InfoPanel
+    Update-CompliesKey
     Write-Console "Windows activatie: $(if ($script:okActivation) { 'OK' } else { 'NIET geactiveerd' })" $(if ($script:okActivation) { 'ok' } else { 'error' })
     Write-Console "TPM: $(if ($script:okTpm) { 'OK' } else { 'NIET gevonden' })" $(if ($script:okTpm) { 'ok' } else { 'error' })
     Write-Console "Secure Boot: $(if ($script:okSecureBoot) { 'OK' } else { 'NIET ingeschakeld' })" $(if ($script:okSecureBoot) { 'ok' } else { 'error' })
