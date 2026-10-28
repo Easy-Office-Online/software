@@ -119,14 +119,16 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="EOO - Windows Installatie Tool"
         Width="980" Height="720" MinWidth="640" MinHeight="500"
-        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI">
+        WindowStartupLocation="CenterScreen" FontFamily="Tahoma"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
         <SolidColorBrush x:Key="BrushBg"        Color="#FAF9F6"/>
         <SolidColorBrush x:Key="BrushCard"      Color="#FFFFFF"/>
         <SolidColorBrush x:Key="BrushBorder"    Color="#E4E1DB"/>
         <SolidColorBrush x:Key="BrushAccent"    Color="#208AD0"/>
         <SolidColorBrush x:Key="BrushAccentDark" Color="#03173D"/>
-        <SolidColorBrush x:Key="BrushSubText"   Color="#646C7A"/>
+        <SolidColorBrush x:Key="BrushSubText"   Color="#4B5262"/>
+        <SolidColorBrush x:Key="BrushText"      Color="#000000"/>
         <SolidColorBrush x:Key="BrushDanger"    Color="#DC2626"/>
         <SolidColorBrush x:Key="BrushConsoleDefault" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="BrushConsoleOk"       Color="#60BEF0"/>
@@ -147,18 +149,22 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{StaticResource BrushCard}"
+                        <Grid>
+                            <Border Background="{StaticResource BrushCard}" CornerRadius="8">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.08" Color="#000000"/>
+                                </Border.Effect>
+                            </Border>
+                            <Border x:Name="Bd" Background="{StaticResource BrushCard}"
                                 BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.08" Color="#000000"/>
-                            </Border.Effect>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0">
                                 <Path x:Name="PART_Icon" Width="15" Height="15" Stretch="Uniform" Margin="0,0,10,0"
                                       Fill="{StaticResource BrushAccentDark}" Data="{TemplateBinding Tag}"/>
                                 <TextBlock x:Name="PART_Text" Text="{TemplateBinding Content}"
-                                           Foreground="{StaticResource BrushAccentDark}" VerticalAlignment="Center"/>
+                                           Foreground="{StaticResource BrushText}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushAccent}"/>
@@ -178,18 +184,22 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{StaticResource BrushCard}"
+                        <Grid>
+                            <Border Background="{StaticResource BrushCard}" CornerRadius="8">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.08" Color="#000000"/>
+                                </Border.Effect>
+                            </Border>
+                            <Border x:Name="Bd" Background="{StaticResource BrushCard}"
                                 BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.08" Color="#000000"/>
-                            </Border.Effect>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0">
                                 <Path x:Name="PART_Icon" Width="15" Height="15" Stretch="Uniform" Margin="0,0,10,0"
                                       Fill="{StaticResource BrushAccentDark}" Data="{TemplateBinding Tag}"/>
                                 <TextBlock x:Name="PART_Text" Text="{TemplateBinding Content}"
-                                           Foreground="{StaticResource BrushAccentDark}" VerticalAlignment="Center"/>
+                                           Foreground="{StaticResource BrushText}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource BrushDanger}"/>
@@ -286,11 +296,18 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                     <GradientStop Color="#03173D" Offset="1"/>
                 </LinearGradientBrush>
             </Grid.Background>
+            <!-- Wit logovlak met schuine rand + dunne accentstreep -->
+            <Polygon Points="0,0 292,0 256,107 0,107" Fill="White">
+                <Polygon.Effect>
+                    <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.25" Color="#03173D"/>
+                </Polygon.Effect>
+            </Polygon>
+            <Polygon Points="298,0 306,0 270,107 262,107" Fill="#60BEF0" Opacity="0.85"/>
             <Image x:Name="ImgLogo" Width="230" Height="98" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,5,0,0" Stretch="Uniform"/>
             <TextBlock x:Name="TxtLogoFallback" Text="EOO" Foreground="White" FontSize="22" FontWeight="Bold"
                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,24,0,0" Visibility="Collapsed"/>
             <TextBlock Text="Windows Installatie Tool" Foreground="White" FontSize="14"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="252,50,0,0"/>
+                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="310,50,0,0"/>
             <TextBlock x:Name="TxtVersion" Foreground="#CBD5E1" FontSize="11"
                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,88,16,0"/>
             <Border Height="3" VerticalAlignment="Bottom" Background="{StaticResource BrushAccent}"/>
@@ -307,10 +324,13 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="{StaticResource BrushBg}">
                 <StackPanel Margin="22,14,22,20" MaxWidth="500" HorizontalAlignment="Left">
 
-                    <Border Background="{StaticResource BrushCard}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="10" Padding="16">
+                    <Grid>
+                    <Border Background="{StaticResource BrushCard}" CornerRadius="10">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.06" Color="#000000"/>
                         </Border.Effect>
+                    </Border>
+                    <Border Background="{StaticResource BrushCard}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="10" Padding="16">
                         <DockPanel LastChildFill="True">
                             <TextBlock x:Name="TxtRefresh" DockPanel.Dock="Bottom" Text="&#8635; Vernieuwen"
                                        Foreground="{StaticResource BrushAccent}" FontSize="11" HorizontalAlignment="Right"
@@ -326,6 +346,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                             </Grid>
                         </DockPanel>
                     </Border>
+                    </Grid>
 
                     <!-- Systeem -->
                     <TextBlock Text="Systeem" Style="{StaticResource SectionTitle}"/>
@@ -654,8 +675,7 @@ function Start-EOOJob {
 $script:infoRowMap = @{}
 function New-InfoRow {
     param([string]$Key)
-    $row = New-Object System.Windows.Controls.StackPanel
-    $row.Orientation = 'Horizontal'
+    $row = New-Object System.Windows.Controls.DockPanel
     $row.Margin = '0,0,0,7'
 
     $icon = New-Object System.Windows.Controls.TextBlock
@@ -666,8 +686,8 @@ function New-InfoRow {
     $icon.Text = '-'
 
     $label = New-Object System.Windows.Controls.TextBlock
-    $label.Foreground = $window.FindResource('BrushSubText')
-    $label.FontSize = 12
+    $label.Foreground = $window.FindResource('BrushText')
+    $label.FontSize = 13
     $label.VerticalAlignment = 'Center'
     $label.TextWrapping = 'Wrap'
 
@@ -703,15 +723,13 @@ function Update-InfoPanel {
     $oemRow = $script:infoRowMap['OemKey']
     if ($script:oemKey) {
         Set-InfoRow 'OemKey' "OEM-sleutel: $script:oemKey" $true -Neutral
-        $oemRow.Label.FontFamily = 'Consolas'
-        $oemRow.Label.Foreground = $window.FindResource('BrushAccentDark')
+        $oemRow.Label.Foreground = $window.FindResource('BrushText')
         $btnActivateOem.Visibility = 'Visible'
     } else {
         Set-InfoRow 'OemKey' 'Geen OEM-sleutel in firmware gevonden' $true -Neutral
         $oemRow.Icon.Text = '-'
         $oemRow.Icon.Foreground = $window.FindResource('BrushSubText')
-        $oemRow.Label.ClearValue([System.Windows.Controls.TextBlock]::FontFamilyProperty)
-        $oemRow.Label.Foreground = $window.FindResource('BrushSubText')
+        $oemRow.Label.Foreground = $window.FindResource('BrushText')
         $btnActivateOem.Visibility = 'Collapsed'
     }
 
@@ -810,8 +828,7 @@ function Update-CompliesKey {
     Set-InfoRow 'CompliesKey' 'Complies-sleutel: zoeken in Azure...' $true -Neutral
     $cRow.Icon.Text = '-'
     $cRow.Icon.Foreground = $window.FindResource('BrushSubText')
-    $cRow.Label.ClearValue([System.Windows.Controls.TextBlock]::FontFamilyProperty)
-    $cRow.Label.Foreground = $window.FindResource('BrushSubText')
+    $cRow.Label.Foreground = $window.FindResource('BrushText')
 
     try { $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim() } catch { $serial = $null }
     if (-not $serial) {
@@ -856,8 +873,7 @@ function Update-CompliesKey {
         if ($script:compliesResult) {
             $script:compliesKey = $script:compliesResult.Key
             Set-InfoRow 'CompliesKey' "Complies-sleutel: $script:compliesKey" $true -Neutral
-            $cRow.Label.FontFamily = 'Consolas'
-            $cRow.Label.Foreground = $window.FindResource('BrushAccentDark')
+            $cRow.Label.Foreground = $window.FindResource('BrushText')
             $btnActivateComplies.Visibility = 'Visible'
             Write-Console "Complies-sleutel gevonden voor dit serienummer ($($script:compliesResult.OS), $($script:compliesResult.File))." 'ok'
         } else {
