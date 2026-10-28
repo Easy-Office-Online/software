@@ -696,7 +696,7 @@ function New-InfoRow {
     [void]$infoRows.Children.Add($row)
     $script:infoRowMap[$Key] = @{ Row = $row; Icon = $icon; Label = $label }
 }
-'OemKey', 'CompliesKey', 'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
+'ActiveKey', 'OemKey', 'CompliesKey', 'Windows', 'Activatie', 'Tpm', 'SecureBoot', 'Internet', 'HP', 'Laptop', 'Wifi', 'Serienummer' |
     ForEach-Object { New-InfoRow $_ }
 
 function Set-InfoRow {
@@ -717,7 +717,49 @@ $script:okActivation = $false; $script:okTpm = $false; $script:okSecureBoot = $f
 $script:okInternet   = $false; $script:okWifi = $false; $script:hpBloatFound = @()
 $script:oemKey       = $null
 
+# Windows-productsleutel decoderen uit DigitalProductId (registry)
+function ConvertFrom-DigitalProductId {
+    param([byte[]]$Id)
+    $offset = 52
+    $chars  = 'BCDFGHJKMPQRTVWXY2346789'
+    $isWin8 = [int][math]::Floor($Id[66] / 6) -band 1
+    $Id[66] = $Id[66] -band 0xF7
+    $key = ''; $last = 0
+    for ($i = 24; $i -ge 0; $i--) {
+        $cur = 0
+        for ($j = 14; $j -ge 0; $j--) {
+            $cur = $cur * 256 + $Id[$j + $offset]
+            $Id[$j + $offset] = [byte][math]::Floor($cur / 24)
+            $cur = $cur % 24
+        }
+        $key = $chars[$cur] + $key
+        $last = $cur
+    }
+    if ($isWin8 -eq 1) { $key = $key.Substring(1).Insert($last, 'N') }
+    return ($key -replace '(.{5})(?!$)', '$1-')
+}
+
 function Update-InfoPanel {
+    # Sleutel waarmee Windows nu geactiveerd is. De volledige sleutel komt uit
+    # DigitalProductId; alleen tonen als die overeenkomt met de PartialProductKey.
+    try {
+        $winLic = Get-CimInstance -Query "SELECT Description, PartialProductKey, LicenseStatus FROM SoftwareLicensingProduct WHERE ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL" |
+                  Sort-Object { $_.LicenseStatus -ne 1 } | Select-Object -First 1
+        if ($winLic) {
+            $fullKey = $null
+            try {
+                $dpid = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name DigitalProductId -ErrorAction Stop).DigitalProductId
+                if ($dpid) { $fullKey = ConvertFrom-DigitalProductId -Id $dpid }
+            } catch {}
+            $shown   = if ($fullKey -and $fullKey.EndsWith($winLic.PartialProductKey)) { $fullKey } else { "*****-*****-*****-*****-$($winLic.PartialProductKey)" }
+            $channel = if ($winLic.Description -match ',\s*(\S+)\s+channel') { " ($($matches[1]))" } else { '' }
+            $prefix  = if ($winLic.LicenseStatus -eq 1) { 'Actieve sleutel' } else { 'Sleutel (niet geactiveerd)' }
+            Set-InfoRow 'ActiveKey' "${prefix}: $shown$channel" ($winLic.LicenseStatus -eq 1)
+        } else {
+            Set-InfoRow 'ActiveKey' 'Geen productsleutel geinstalleerd' $false
+        }
+    } catch { Set-InfoRow 'ActiveKey' 'Actieve sleutel: controlefout' $false }
+
     # OEM-sleutel uit firmware (OA3)
     try { $script:oemKey = (Get-CimInstance SoftwareLicensingService).OA3xOriginalProductKey } catch { $script:oemKey = $null }
     $oemRow = $script:infoRowMap['OemKey']
@@ -1019,29 +1061,9 @@ $btnActivateComplies.Add_Click({
 $btnBackupKey.Add_Click({
     $btnBackupKey.IsEnabled = $false
     Write-Console 'Productsleutel back-uppen naar Azure Files...' 'start'
-    Start-EOOJob -Key 'KeyBackup' -ArgumentList @($script:afStorageAccount, $script:afShareName, $script:afKey) -ScriptBlock {
-        param($sa, $sn, $k)
-
-        function ConvertFrom-DigitalProductId {
-            param([byte[]]$Id)
-            $offset = 52
-            $chars  = 'BCDFGHJKMPQRTVWXY2346789'
-            $isWin8 = [int][math]::Floor($Id[66] / 6) -band 1
-            $Id[66] = $Id[66] -band 0xF7
-            $key = ''; $last = 0
-            for ($i = 24; $i -ge 0; $i--) {
-                $cur = 0
-                for ($j = 14; $j -ge 0; $j--) {
-                    $cur = $cur * 256 + $Id[$j + $offset]
-                    $Id[$j + $offset] = [byte][math]::Floor($cur / 24)
-                    $cur = $cur % 24
-                }
-                $key = $chars[$cur] + $key
-                $last = $cur
-            }
-            if ($isWin8 -eq 1) { $key = $key.Substring(1).Insert($last, 'N') }
-            return ($key -replace '(.{5})(?!$)', '$1-')
-        }
+    Start-EOOJob -Key 'KeyBackup' -ArgumentList @($script:afStorageAccount, $script:afShareName, $script:afKey, ${function:ConvertFrom-DigitalProductId}.ToString()) -ScriptBlock {
+        param($sa, $sn, $k, $decodeFn)
+        ${function:ConvertFrom-DigitalProductId} = [scriptblock]::Create($decodeFn)
 
         $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
         if (-not $serial) { $serial = 'ONBEKEND' }
@@ -1381,6 +1403,7 @@ function Export-RapportPDF {
         Serial = $serial; Computer = $env:COMPUTERNAME; Date = Get-Date -Format 'dd-MM-yyyy HH:mm:ss'
         Version = $script:currentVersion; Logo = $script:logoImageGdi
         Checks = @(
+            @{ Label = $script:infoRowMap['ActiveKey'].Label.Text;   OK = $null }
             @{ Label = $script:infoRowMap['OemKey'].Label.Text;      OK = $null }
             @{ Label = $script:infoRowMap['CompliesKey'].Label.Text; OK = $null }
             @{ Label = $script:infoRowMap['Windows'].Label.Text;     OK = $null }
