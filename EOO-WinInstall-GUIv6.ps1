@@ -8,7 +8,7 @@
 #  Opslaan als: UTF-8 with BOM
 # ════════════════════════════════════════════════════════════════
 
-$script:currentVersion = [System.Version]'7.4'
+$script:currentVersion = [System.Version]'7.5'
 $script:versionName    = 'Pizza Gorgonzola'
 
 # ── Azure Files configuratie ───────────────────────────────────────
@@ -634,6 +634,44 @@ $logoClickHandler = {
 $imgLogo.Add_MouseLeftButtonUp($logoClickHandler)
 $txtLogoFallback.Add_MouseLeftButtonUp($logoClickHandler)
 
+# ── Easter egg 2: Konami-code -> pizzamodus (venster draait 360 graden) ─
+$script:Konami    = @('Up','Up','Down','Down','Left','Right','Left','Right','B','A')
+$script:KonamiIdx = 0
+
+# Het easter egg zelf: content 360 graden laten draaien en titel aanpassen
+function Start-PizzaMode {
+    $content = $window.Content
+    $rt = [System.Windows.Media.RotateTransform]::new()
+    $content.RenderTransformOrigin = [System.Windows.Point]::new(0.5, 0.5)
+    $content.RenderTransform = $rt
+
+    $duur = [System.Windows.Duration]::new([TimeSpan]::FromSeconds(1.5))
+    $anim = [System.Windows.Media.Animation.DoubleAnimation]::new(0, 360, $duur)
+    $rt.BeginAnimation([System.Windows.Media.RotateTransform]::AngleProperty, $anim)
+
+    $window.Title = 'Pizza Calzone, extra kaas'
+    Write-Host '[EasterEgg] Pizzamodus geactiveerd' -ForegroundColor Yellow
+    Write-Console "Pizzamodus geactiveerd: de pizza wordt even rondgedraaid. $([char]::ConvertFromUtf32(0x1F355))" 'ok'
+}
+
+# PreviewKeyDown op het venster, zodat focused controls de pijltjes niet opvangen
+$window.Add_PreviewKeyDown({
+    param($sender, $e)
+    $key = $e.Key.ToString()
+
+    if ($key -eq $script:Konami[$script:KonamiIdx]) {
+        $script:KonamiIdx++
+        if ($script:KonamiIdx -eq $script:Konami.Count) {
+            $script:KonamiIdx = 0
+            Start-PizzaMode
+        }
+    }
+    else {
+        # Bij een fout opnieuw beginnen, maar 'Up' telt meteen als eerste stap
+        $script:KonamiIdx = if ($key -eq $script:Konami[0]) { 1 } else { 0 }
+    }
+})
+
 # ── Herbruikbare achtergrondtaak-helper (Start-Job + DispatcherTimer) ─
 # Jobs/timers staan in $script:eooJobs zodat de Tick-handler ze altijd
 # via scriptscope opnieuw opzoekt (lokale closures over WinForms/WPF
@@ -929,25 +967,25 @@ function Update-CompliesKey {
 $txtRefresh.Add_MouseLeftButtonUp({
     Update-InfoPanel
     Update-CompliesKey
-    Write-Console 'Infopaneel vernieuwd.' 'info'
+    Write-Console 'Infopaneel vernieuwd. Verse toppings erop gelegd.' 'info'
 })
 
 # ── Sectie: Systeem ─────────────────────────────────────────────────
 $btnRestart.Add_Click({
     if ([System.Windows.MessageBox]::Show('Systeem nu herstarten?', 'Herstarten bevestigen', 'YesNo', 'Warning') -ne 'Yes') { return }
-    Write-Console 'Systeem wordt herstart...' 'start'
+    Write-Console 'Systeem wordt herstart... de oven gaat even uit en weer aan.' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /r /t 0' -NoNewWindow
 })
 
 $btnShutdown.Add_Click({
     if ([System.Windows.MessageBox]::Show('Systeem nu afsluiten?', 'Afsluiten bevestigen', 'YesNo', 'Warning') -ne 'Yes') { return }
-    Write-Console 'Systeem wordt afgesloten...' 'start'
+    Write-Console 'Systeem wordt afgesloten... de pizzeria gaat dicht.' 'start'
     Start-Process PowerShell -ArgumentList '-Command shutdown.exe /s /t 0' -NoNewWindow
 })
 
 $btnBios.Add_Click({
     if ([System.Windows.MessageBox]::Show('Nu herstarten naar BIOS/UEFI-instellingen?', 'BIOS-herstart bevestigen', 'YesNo', 'Warning') -ne 'Yes') { return }
-    Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen...' 'start'
+    Write-Console 'Systeem wordt herstart naar BIOS/UEFI-instellingen... even de oventhermostaat bijstellen.' 'start'
     $shutdownExe = "$env:windir\System32\shutdown.exe"
     Start-Process -FilePath $shutdownExe -ArgumentList '/a' -NoNewWindow -Wait -ErrorAction SilentlyContinue
     $errFile = "$env:TEMP\eoo_bios_reboot_err.txt"
@@ -959,13 +997,13 @@ $btnBios.Add_Click({
     Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 })
 
-$btnWU.Add_Click({ Write-Console 'Windows Update instellingen openen...' 'start'; Start-Process 'ms-settings:windowsupdate' })
-$btnDM.Add_Click({ Write-Console 'Apparaatbeheer openen...' 'start'; Start-Process 'devmgmt.msc' })
-$btnAW.Add_Click({ Write-Console 'Windows activeringsscherm openen...' 'start'; Start-Process 'C:\Windows\System32\slui.exe' })
+$btnWU.Add_Click({ Write-Console 'Windows Update instellingen openen... verse ingredienten bestellen.' 'start'; Start-Process 'ms-settings:windowsupdate' })
+$btnDM.Add_Click({ Write-Console 'Apparaatbeheer openen... even in de keuken kijken.' 'start'; Start-Process 'devmgmt.msc' })
+$btnAW.Add_Click({ Write-Console 'Windows activeringsscherm openen... de oven aanzetten.' 'start'; Start-Process 'C:\Windows\System32\slui.exe' })
 
 $btnWifi.Add_Click({
     $btnWifi.IsEnabled = $false
-    Write-Console 'WiFi profiel toevoegen...' 'start'
+    Write-Console 'WiFi profiel toevoegen... de bezorger krijgt het adres.' 'start'
     $ssid = 'EOO_Install'
     $pw   = 'House-Earth-Wealth-Repair-8'
     $xml  = @"
@@ -995,7 +1033,7 @@ $btnWifi.Add_Click({
     [System.IO.File]::WriteAllText($tmp, $xml, [System.Text.Encoding]::UTF8)
     $out = & netsh wlan add profile filename="$tmp" user=all 2>&1
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
-    if ($LASTEXITCODE -eq 0) { Write-Console "[OK] WiFi profiel '$ssid' toegevoegd." 'ok' } else { Write-Console "FOUT: $out" 'error' }
+    if ($LASTEXITCODE -eq 0) { Write-Console "[OK] WiFi profiel '$ssid' toegevoegd. Bezorging kan beginnen." 'ok' } else { Write-Console "FOUT: $out (bezorger kan het adres niet vinden)" 'error' }
     $btnWifi.IsEnabled = $true
 })
 
@@ -1015,15 +1053,15 @@ $btnActivateKey.Add_Click({
         return
     }
     $btnActivateKey.IsEnabled = $false
-    Write-Console "Productsleutel installeren: $key" 'start'
+    Write-Console "Productsleutel installeren: $key (het deeg wordt gekneed)" 'start'
     Start-EOOJob -Key 'Activate' -ArgumentList @($key) -ScriptBlock {
         param($key)
         $r1 = & cscript.exe //B "$env:windir\system32\slmgr.vbs" /ipk $key 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Sleutel installeren mislukt: $r1" }
-        Write-Output "[1/2] Sleutel geinstalleerd."
+        Write-Output "[1/2] Sleutel geinstalleerd. Pizza gaat de oven in..."
         $r2 = & cscript.exe //B "$env:windir\system32\slmgr.vbs" /ato 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Activatie mislukt: $r2" }
-        Write-Output "[OK] Windows succesvol geactiveerd."
+        Write-Output "[OK] Windows succesvol geactiveerd. Pizza is gaar!"
     } -OnOutput {
         param($line)
         if ($line -match '^\[OK\]') { Write-Console $line 'ok' } else { Write-Console $line 'info' }
@@ -1060,7 +1098,7 @@ $btnActivateComplies.Add_Click({
 # sleutel (gedecodeerd uit DigitalProductId) naar X:\Productsleutels\<serienummer>_<tijd>.txt
 $btnBackupKey.Add_Click({
     $btnBackupKey.IsEnabled = $false
-    Write-Console 'Productsleutel back-uppen naar Azure Files...' 'start'
+    Write-Console 'Productsleutel back-uppen naar Azure Files... het recept gaat in de kluis.' 'start'
     Start-EOOJob -Key 'KeyBackup' -ArgumentList @($script:afStorageAccount, $script:afShareName, $script:afKey, ${function:ConvertFrom-DigitalProductId}.ToString()) -ScriptBlock {
         param($sa, $sn, $k, $decodeFn)
         ${function:ConvertFrom-DigitalProductId} = [scriptblock]::Create($decodeFn)
@@ -1121,7 +1159,7 @@ $btnBackupKey.Add_Click({
         if (-not (Test-Path $keyDir)) { New-Item -ItemType Directory -Path $keyDir | Out-Null }
         Copy-Item -Path $localPath -Destination "$keyDir\$fn" -Force
         Remove-Item $localPath -Force -ErrorAction SilentlyContinue
-        Write-Output "[OK] Productsleutel opgeslagen in Azure Files: Productsleutels\$fn"
+        Write-Output "[OK] Productsleutel opgeslagen in Azure Files: Productsleutels\$fn (recept veilig bewaard)"
     } -OnOutput {
         param($line)
         if ($line -match '^\[OK\]') { Write-Console $line 'ok' } else { Write-Console $line 'info' }
@@ -1138,16 +1176,16 @@ $btnBackupKey.Add_Click({
 $btnLSU.Add_Click({
     $btnLSU.IsEnabled = $false
     $script:lsuSignal = $null
-    Write-Console 'Lenovo System Update: gestart...' 'start'
+    Write-Console 'Lenovo System Update: bestelling geplaatst...' 'start'
     Start-EOOJob -Key 'LSU' -ScriptBlock {
         $configUrl = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/lenovoSU.txt'
         $raw     = (Invoke-WebRequest -Uri $configUrl -UseBasicParsing).Content
         $version = ($raw -split "`n" | Where-Object { $_ -match '^Version' }).Split('=')[1].Trim().Trim('"')
         $url     = ($raw -split "`n" | Where-Object { $_ -match '^URL' }).Split('=', 2)[1].Trim().Trim('"')
         if (-not $version -or -not $url) { throw 'Config onvolledig: versie of URL ontbreekt.' }
-        Write-Output "[1/4] Config opgehaald. Versie: $version"
+        Write-Output "[1/4] Recept opgehaald. Versie: $version"
 
-        Write-Output '[2/4] Controleren of al geinstalleerd...'
+        Write-Output '[2/4] Kijken of deze pizza al op tafel staat...'
         $regPaths  = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
                        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
         $installed = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
@@ -1165,16 +1203,16 @@ $btnLSU.Add_Click({
             Write-Output '    Niet geinstalleerd, doorgaan...'
         }
 
-        Write-Output "[3/4] Installer downloaden (v$version)..."
+        Write-Output "[3/4] Ingredienten ophalen (installer v$version downloaden)..."
         $installer = "$env:TEMP\LenovoSystemUpdate_$version.exe"
         Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
-        Write-Output '    Download geslaagd.'
+        Write-Output '    Download geslaagd, alles ligt klaar op het aanrecht.'
 
-        Write-Output '[4/4] Installeren...'
+        Write-Output '[4/4] Pizza wordt gebakken (installeren)...'
         $p = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
         if (Test-Path $installer) { Remove-Item $installer -Force }
         if ($p.ExitCode -ne 0) { throw "Installatie mislukt. Exit code: $($p.ExitCode)" }
-        Write-Output '[OK] Lenovo System Update succesvol geinstalleerd.'
+        Write-Output '[OK] Lenovo System Update succesvol geinstalleerd. Vers uit de oven!'
 
         $tvsu = 'C:\Program Files (x86)\Lenovo\System Update\tvsu.exe'
         if (-not (Test-Path $tvsu)) {
@@ -1194,13 +1232,13 @@ $btnLSU.Add_Click({
         if (-not $succeeded) {
             Write-Console "FOUT: $reason" 'error'
         } elseif ($script:lsuSignal -match '^SIGNAL:UPTODATE') {
-            Write-Console 'Al up-to-date, geen actie nodig.' 'ok'
+            Write-Console 'Al up-to-date, deze pizza is nog warm. Geen actie nodig.' 'ok'
         } elseif ($script:lsuSignal -match '^SIGNAL:TVSU:(.+)') {
             $tvsuPath = $matches[1].Trim()
             if ($tvsuPath -and (Test-Path $tvsuPath)) {
-                Write-Console 'Lenovo System Update wordt gestart...' 'start'
+                Write-Console 'Lenovo System Update wordt geserveerd...' 'start'
                 Start-Process -FilePath $tvsuPath
-                Write-Console 'Lenovo System Update gestart.' 'ok'
+                Write-Console 'Lenovo System Update gestart. Eet smakelijk!' 'ok'
             } else {
                 Write-Console 'tvsu.exe niet gevonden op verwacht pad.' 'info'
             }
@@ -1211,7 +1249,7 @@ $btnLSU.Add_Click({
 
 $btnHPIA.Add_Click({
     $btnHPIA.IsEnabled = $false
-    Write-Console 'HP Image Assistant: gestart...' 'start'
+    Write-Console 'HP Image Assistant: bestelling geplaatst...' 'start'
     Start-EOOJob -Key 'HPIA' -ScriptBlock {
         $TextFileURL = 'https://raw.githubusercontent.com/Easy-Office-Online/software/refs/heads/main/hpia.txt'
         $text    = Invoke-RestMethod -Uri $TextFileURL
@@ -1221,9 +1259,9 @@ $btnHPIA.Add_Click({
             if ($line -match 'URL = "(.*)"')     { $url     = $matches[1] }
         }
         if (-not $version -or -not $url) { throw 'Config onvolledig: versie of URL ontbreekt.' }
-        Write-Output "[1/5] Config opgehaald. Versie: $version"
+        Write-Output "[1/5] Recept opgehaald. Versie: $version"
 
-        Write-Output '[2/5] Doelmappen aanmaken...'
+        Write-Output '[2/5] Aanrecht vrijmaken (doelmappen aanmaken)...'
         $folderPath = 'C:\ProgramData\eoo\HPIA'
         $filename   = [System.IO.Path]::GetFileName($url)
         $filepath   = "$folderPath\$filename"
@@ -1231,12 +1269,12 @@ $btnHPIA.Add_Click({
         New-Item -ItemType Directory -Path 'C:\HPIA'       -Force | Out-Null
         New-Item -ItemType Directory -Path 'C:\HPIAReport' -Force | Out-Null
 
-        Write-Output '[3/5] Setup downloaden...'
+        Write-Output '[3/5] Ingredienten ophalen (setup downloaden)...'
         $ProgressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $url -OutFile $filepath
         Write-Output '    Download geslaagd.'
 
-        Write-Output '[4/5] Setup uitpakken...'
+        Write-Output '[4/5] Deeg uitrollen (setup uitpakken)...'
         # Nieuwere HPIA-wrapper (hpsoftpaqwrapper) extraheert niet meer standaard naar
         # C:\SWSetup zonder expliciete /f doelmap; exitcode 1168 is normale "wrapper noise".
         Start-Process -FilePath $filepath -ArgumentList '/s /e /f "C:\SWSetup"' -Wait
@@ -1255,11 +1293,11 @@ $btnHPIA.Add_Click({
         Remove-Item $filepath -ErrorAction SilentlyContinue
         Write-Output '    HPIA staat in C:\HPIA'
 
-        Write-Output '[5/5] HPIA uitvoeren (drivers analyseren en installeren)...'
+        Write-Output '[5/5] Drivers worden gebakken (HPIA analyseert en installeert)...'
         Start-Process -FilePath 'C:\HPIA\HPImageAssistant.exe' `
             -ArgumentList '/Operation:Analyze /Category:All /Selection:All /Action:Install /Silent /ReportFolder:C:\HPIAReport' `
             -NoNewWindow -Wait
-        Write-Output '[OK] Klaar. Rapport staat in C:\HPIAReport'
+        Write-Output '[OK] Pizza is klaar! Rapport staat in C:\HPIAReport'
     } -OnOutput {
         param($line)
         if     ($line -match '^\[OK\]')      { Write-Console $line 'ok' }
@@ -1276,7 +1314,7 @@ $btnHPIA.Add_Click({
 
 # ── Sectie: Autopilot ───────────────────────────────────────────────
 $btnHWIDOvr.Add_Click({
-    Write-Console 'HWID Export + Azure Files Upload (Overwrite) wordt gestart...' 'start'
+    Write-Console 'HWID Export + Azure Files Upload (Overwrite) wordt gestart... bestelbon gaat naar de keuken.' 'start'
     $content = $script_HWID_Overwrite.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
@@ -1284,7 +1322,7 @@ $btnHWIDOvr.Add_Click({
 })
 
 $btnHWIDApp.Add_Click({
-    Write-Console 'HWID Export + Azure Files Upload (Append) wordt gestart...' 'start'
+    Write-Console 'HWID Export + Azure Files Upload (Append) wordt gestart... bestelling bij de grote bestelling gevoegd.' 'start'
     $content = $script_HWID_Append.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
     $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID_Aanvullen.ps1'
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
@@ -1313,14 +1351,14 @@ start "" explorer.exe "\\$sa.file.core.windows.net\$sn"
     $shell.ShellExecute('cmd.exe', "/c `"$cmdPath`"", '', 'open', 0)
     [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
 
-    Write-Console "  Map \\$sa.file.core.windows.net\$sn geopend in de Verkenner." 'ok'
+    Write-Console "  Map \\$sa.file.core.windows.net\$sn geopend in de Verkenner. Voorraadkast staat open." 'ok'
     Write-Console '─────────────────────────────' 'info'
     $btnAzureMount.IsEnabled = $true
 }
 
 $btnAzureMount.Add_Click({
     $btnAzureMount.IsEnabled = $false
-    Write-Console '─── Azure opslag openen ───' 'start'
+    Write-Console '─── Azure opslag openen (de voorraadkast) ───' 'start'
     Write-Console "  Storage account : $($script:afStorageAccount)" 'info'
     Write-Console "  Share           : $($script:afShareName)" 'info'
     Write-Console "  UNC pad         : \\$($script:afStorageAccount).file.core.windows.net\$($script:afShareName)" 'info'
@@ -1508,7 +1546,7 @@ function Export-RapportPDF {
 
     try {
         $pd.Print()
-        Write-Console 'PDF gereed, uploaden naar Azure Files...' 'info'
+        Write-Console 'PDF gereed, de bon wordt naar Azure Files bezorgd...' 'info'
         Start-EOOJob -Key 'PdfUpload' -ArgumentList @($outputPath, $script:afStorageAccount, $script:afShareName, $script:afKey) -ScriptBlock {
             param($localPath, $sa, $sn, $k)
             $waited = 0
@@ -1549,13 +1587,13 @@ function Export-RapportPDF {
 
 $btnExportPDF.Add_Click({
     $btnExportPDF.IsEnabled = $false
-    Write-Console 'Rapport als PDF exporteren...' 'start'
+    Write-Console 'Rapport als PDF exporteren... de kassabon wordt geprint.' 'start'
     Export-RapportPDF
 })
 
 # ── Opstart ─────────────────────────────────────────────────────────
 $window.Add_Loaded({
-    Write-Console 'Systeemcontrole uitgevoerd.' 'info'
+    Write-Console 'Oven voorverwarmd: systeemcontrole uitgevoerd.' 'info'
     Update-InfoPanel
     Update-CompliesKey
     Write-Console "Windows activatie: $(if ($script:okActivation) { 'OK' } else { 'NIET geactiveerd' })" $(if ($script:okActivation) { 'ok' } else { 'error' })
