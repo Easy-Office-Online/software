@@ -22,86 +22,6 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit
 }
 
-$script_HWID_Overwrite = @'
-$ErrorActionPreference = 'Stop'
-$GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
-if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
-$storageAccount = '##STORAGEACCOUNT##'
-$shareName      = '##SHARENAME##'
-$key            = '##KEY##'
-try {
-    Write-Host "HWID ophalen..."
-    $serial = (Get-CimInstance Win32_BIOS).SerialNumber
-    $dev    = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
-    $hash   = $dev.DeviceHardwareData
-    if (-not $hash) { throw 'Hardware hash niet gevonden.' }
-    $file   = "$env:TEMP\Autopilot-$serial.csv"
-    $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
-    $line   = $serial + ',,' + $hash + ',' + $GroupTag + ','
-    Set-Content -Path $file -Value $header -Encoding UTF8
-    Add-Content -Path $file -Value $line   -Encoding UTF8
-    Write-Host "CSV aangemaakt: $file"
-    Write-Host "Uploaden naar Azure Files..."
-    if (-not (Test-Path 'X:\')) {
-        Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$storageAccount.file.core.windows.net\*" } | ForEach-Object {
-            Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
-        }
-        try {
-            New-SmbMapping -LocalPath 'X:' -RemotePath "\\$storageAccount.file.core.windows.net\$shareName" -UserName "Azure\$storageAccount" -Password $key -Persistent $false -ErrorAction Stop | Out-Null
-        } catch {
-            throw "Kan Azure Files share niet bereiken. Controleer poort 445. ($_)"
-        }
-    }
-    if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
-    Copy-Item -Path $file -Destination "X:\HWID\$serial.csv" -Force
-    Write-Host "OK: HWID gekopieerd naar Azure Files map HWID." -ForegroundColor Green
-} catch {
-    Write-Host "FOUT: $_" -ForegroundColor Red
-}
-Read-Host "Druk op Enter om te sluiten"
-'@
-
-$script_HWID_Append = @'
-$ErrorActionPreference = 'Stop'
-$GroupTag = Read-Host 'Voer GroupTag in (bijv: EOO-W11-FLEX)'
-if (-not $GroupTag) { Write-Host 'Geen GroupTag opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
-$BatchName = Read-Host 'Voer batch naam in (bijv: Batch-01 of School-A)'
-if (-not $BatchName) { Write-Host 'Geen batch naam opgegeven. Stop.' -ForegroundColor Red; Read-Host; exit 1 }
-$storageAccount = '##STORAGEACCOUNT##'
-$shareName      = '##SHARENAME##'
-$key            = '##KEY##'
-$file = "$env:TEMP\Autopilot-$BatchName.csv"
-try {
-    Write-Host "HWID ophalen..."
-    $serial = (Get-CimInstance Win32_BIOS).SerialNumber
-    $dev    = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01 -ErrorAction Stop
-    $hash   = $dev.DeviceHardwareData
-    if (-not $hash) { throw 'Hardware hash niet gevonden.' }
-    $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
-    $line   = $serial + ',,' + $hash + ',' + $GroupTag + ','
-    if (-not (Test-Path $file)) { Set-Content -Path $file -Value $header -Encoding UTF8 }
-    Add-Content -Path $file -Value $line -Encoding UTF8
-    Write-Host "Regel toegevoegd aan: $file"
-    Write-Host "Uploaden naar Azure Files..."
-    if (-not (Test-Path 'X:\')) {
-        Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$storageAccount.file.core.windows.net\*" } | ForEach-Object {
-            Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
-        }
-        try {
-            New-SmbMapping -LocalPath 'X:' -RemotePath "\\$storageAccount.file.core.windows.net\$shareName" -UserName "Azure\$storageAccount" -Password $key -Persistent $false -ErrorAction Stop | Out-Null
-        } catch {
-            throw "Kan Azure Files share niet bereiken. Controleer poort 445. ($_)"
-        }
-    }
-    if (-not (Test-Path 'X:\HWID')) { New-Item -ItemType Directory -Path 'X:\HWID' | Out-Null }
-    Copy-Item -Path $file -Destination "X:\HWID\$BatchName.csv" -Force
-    Write-Host "OK: Bulk CSV gekopieerd naar Azure Files map HWID als $BatchName.csv." -ForegroundColor Green
-} catch {
-    Write-Host "FOUT: $_" -ForegroundColor Red
-}
-Read-Host "Druk op Enter om te sluiten"
-'@
-
 function Write-TempScript {
     param([string]$Content, [string]$Filename)
     $path = Join-Path $env:TEMP $Filename
@@ -382,8 +302,34 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                     <!-- Autopilot -->
                     <TextBlock Text="Autopilot" Style="{StaticResource SectionTitle}"/>
                     <Border Height="1" Background="{StaticResource BrushBorder}" Margin="0,0,0,10"/>
-                    <Button x:Name="BtnHWIDOvr" Content="HWID Export - Overwrite (per device)" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
-                    <Button x:Name="BtnHWIDApp" Content="HWID Export - Append (bulk CSV)" Style="{StaticResource OutlineButton}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Group tag" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}" Margin="0,0,0,2" FontSize="12"/>
+                    <TextBlock Text="Nieuwe omgevingen (na juni 2026):" Foreground="{StaticResource BrushSubText}" FontSize="11" Margin="0,0,0,6"/>
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="BtnTagFull"   Grid.Column="0" Content="1  Full"   Style="{StaticResource OutlineButton}"/>
+                        <Button x:Name="BtnTagFlex"   Grid.Column="2" Content="2  Flex"   Style="{StaticResource OutlineButton}"/>
+                        <Button x:Name="BtnTagShared" Grid.Column="4" Content="3  Shared" Style="{StaticResource OutlineButton}"/>
+                    </Grid>
+                    <TextBlock Text="Oudere omgevingen: typ hier zelf een willekeurige group tag (bijv. EOO-W11-FLEX of fitflexdd):"
+                               TextWrapping="Wrap" Foreground="{StaticResource BrushSubText}" FontSize="11" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtGroupTag" Style="{StaticResource KeyInput}" Margin="0,0,0,10" HorizontalAlignment="Left" Width="300"/>
+
+                    <TextBlock Text="Exportmethode" FontWeight="SemiBold" Foreground="{StaticResource BrushAccent}" Margin="0,0,0,6" FontSize="12"/>
+                    <RadioButton x:Name="RbHWIDSingle" GroupName="HWIDMode" IsChecked="True" FontSize="12" Margin="0,0,0,4"
+                                 Content="Per apparaat: eigen CSV per serienummer (overschrijven)"/>
+                    <RadioButton x:Name="RbHWIDBulk" GroupName="HWIDMode" FontSize="12" Margin="0,0,0,8"
+                                 Content="Bulk: toevoegen aan een batch-CSV (meerdere apparaten)"/>
+                    <StackPanel x:Name="PnlHWIDBatch" Visibility="Collapsed" Margin="0,0,0,8">
+                        <TextBlock Text="Batchnaam (bijv. Batch-01 of School-A):" Foreground="{StaticResource BrushSubText}" FontSize="11" Margin="0,0,0,6"/>
+                        <TextBox x:Name="TxtHWIDBatch" Style="{StaticResource KeyInput}" HorizontalAlignment="Left" Width="300"/>
+                    </StackPanel>
+                    <Button x:Name="BtnHWID" Content="HWID exporteren en uploaden naar Azure" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
 
                     <!-- Azure opslag -->
                     <TextBlock Text="Azure opslag" Style="{StaticResource SectionTitle}"/>
@@ -450,8 +396,15 @@ $btnActivateComplies = $window.FindName('BtnActivateComplies')
 $btnBackupKey    = $window.FindName('BtnBackupKey')
 $btnLSU          = $window.FindName('BtnLSU')
 $btnHPIA         = $window.FindName('BtnHPIA')
-$btnHWIDOvr      = $window.FindName('BtnHWIDOvr')
-$btnHWIDApp      = $window.FindName('BtnHWIDApp')
+$btnTagFull      = $window.FindName('BtnTagFull')
+$btnTagFlex      = $window.FindName('BtnTagFlex')
+$btnTagShared    = $window.FindName('BtnTagShared')
+$txtGroupTag     = $window.FindName('TxtGroupTag')
+$rbHWIDSingle    = $window.FindName('RbHWIDSingle')
+$rbHWIDBulk      = $window.FindName('RbHWIDBulk')
+$pnlHWIDBatch    = $window.FindName('PnlHWIDBatch')
+$txtHWIDBatch    = $window.FindName('TxtHWIDBatch')
+$btnHWID         = $window.FindName('BtnHWID')
 $btnAzureMount   = $window.FindName('BtnAzureMount')
 $btnExportPDF    = $window.FindName('BtnExportPDF')
 
@@ -470,6 +423,7 @@ $iconPaths = @{
     Download = 'M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z'
     Play     = 'M8,5V19L19,12L8,5Z'
     Upload   = 'M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z'
+    Label    = 'M5.5,7A1.5,1.5 0 0,1 4,5.5A1.5,1.5 0 0,1 5.5,4A1.5,1.5 0 0,1 7,5.5A1.5,1.5 0 0,1 5.5,7M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.89,2 2,2.89 2,4V11C2,11.55 2.22,12.05 2.59,12.42L11.58,21.41C11.95,21.77 12.45,22 13,22C13.55,22 14.05,21.77 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.44 21.77,11.94 21.41,11.58Z'
 }
 function Get-IconGeometry { param([string]$Name) [System.Windows.Media.Geometry]::Parse($iconPaths[$Name]) }
 
@@ -486,8 +440,10 @@ $btnActivateComplies.Tag = Get-IconGeometry Key
 $btnBackupKey.Tag   = Get-IconGeometry Upload
 $btnLSU.Tag         = Get-IconGeometry Play
 $btnHPIA.Tag        = Get-IconGeometry Play
-$btnHWIDOvr.Tag     = Get-IconGeometry Download
-$btnHWIDApp.Tag     = Get-IconGeometry Download
+$btnTagFull.Tag     = Get-IconGeometry Label
+$btnTagFlex.Tag     = Get-IconGeometry Label
+$btnTagShared.Tag   = Get-IconGeometry Label
+$btnHWID.Tag        = Get-IconGeometry Upload
 $btnAzureMount.Tag  = Get-IconGeometry Cloud
 $btnExportPDF.Tag   = Get-IconGeometry Download
 
@@ -656,7 +612,7 @@ function Start-PizzaMode {
 
 # PreviewKeyDown op het venster, zodat focused controls de pijltjes niet opvangen
 $window.Add_PreviewKeyDown({
-    param($sender, $e)
+    param($src, $e)
     $key = $e.Key.ToString()
 
     if ($key -eq $script:Konami[$script:KonamiIdx]) {
@@ -1308,25 +1264,115 @@ $btnHPIA.Add_Click({
     } -OnComplete {
         param($succeeded, $reason)
         if (-not $succeeded) { Write-Console "FOUT: $reason" 'error' }
+        else {
+            $sum = Get-HPIASummary
+            if ($sum -and $sum.Counts.Total -eq 0) {
+                Write-Console 'Bakresultaat: geen updates nodig, alles is up-to-date.' 'ok'
+            } elseif ($sum) {
+                $c = $sum.Counts
+                Write-Console ("Bakresultaat: {0} aanbevolen, {1} geinstalleerd, {2} herstart nodig, {3} mislukt, {4} niet geinstalleerd." -f $c.Total, $c.Installed, $c.Reboot, $c.Failed, $c.Open) $(if ($c.Failed -gt 0) { 'error' } else { 'ok' })
+                foreach ($it in @($sum.Items | Where-Object { $_.Status -eq 'Failed' })) { Write-Console "  Mislukt: $($it.Name) ($($it.SoftPaq)) - $($it.Detail)" 'error' }
+                if ($c.Reboot -gt 0) { Write-Console '  Herstart het apparaat om de updates af te ronden.' 'start' }
+            }
+        }
         $btnHPIA.IsEnabled = $true
     }
 })
 
 # ── Sectie: Autopilot ───────────────────────────────────────────────
-$btnHWIDOvr.Add_Click({
-    Write-Console 'HWID Export + Azure Files Upload (Overwrite) wordt gestart... bestelbon gaat naar de keuken.' 'start'
-    $content = $script_HWID_Overwrite.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
-    $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID.ps1'
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-    Write-Console 'HWID Azure Files Upload (Overwrite) gestart.' 'info'
-})
+# Alles draait binnen de GUI (geen losse PowerShell-vensters meer).
+# Group tag: snelknoppen Full/Flex/Shared (nieuwe omgevingen na juni 2026)
+# of vrije tekst in het veld (oudere omgevingen).
+$script:groupTagButtons = [ordered]@{ Full = $btnTagFull; Flex = $btnTagFlex; Shared = $btnTagShared }
+function Update-GroupTagButtons {
+    $cur = $txtGroupTag.Text.Trim()
+    foreach ($name in $script:groupTagButtons.Keys) {
+        $style = if ($cur -eq $name) { 'PrimaryButton' } else { 'OutlineButton' }
+        $script:groupTagButtons[$name].Style = $window.FindResource($style)
+    }
+}
+$btnTagFull.Add_Click({   $txtGroupTag.Text = 'Full' })
+$btnTagFlex.Add_Click({   $txtGroupTag.Text = 'Flex' })
+$btnTagShared.Add_Click({ $txtGroupTag.Text = 'Shared' })
+$txtGroupTag.Add_TextChanged({ Update-GroupTagButtons })
 
-$btnHWIDApp.Add_Click({
-    Write-Console 'HWID Export + Azure Files Upload (Append) wordt gestart... bestelling bij de grote bestelling gevoegd.' 'start'
-    $content = $script_HWID_Append.Replace('##STORAGEACCOUNT##', $script:afStorageAccount).Replace('##SHARENAME##', $script:afShareName).Replace('##KEY##', $script:afKey)
-    $p = Write-TempScript -Content $content -Filename 'EOO_Get-HWID_Aanvullen.ps1'
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$p`"" -Verb RunAs
-    Write-Console 'HWID Azure Files Upload (Append) gestart.' 'info'
+$rbHWIDBulk.Add_Checked({   $pnlHWIDBatch.Visibility = 'Visible'; $txtHWIDBatch.Focus() | Out-Null })
+$rbHWIDSingle.Add_Checked({ $pnlHWIDBatch.Visibility = 'Collapsed' })
+
+$btnHWID.Add_Click({
+    $tag = $txtGroupTag.Text.Trim()
+    if (-not $tag) {
+        Write-Console 'Kies een group tag (1 Full, 2 Flex, 3 Shared) of vul zelf een group tag in.' 'error'
+        $txtGroupTag.Focus() | Out-Null
+        return
+    }
+    if ($tag -match '[,"]') { Write-Console 'De group tag mag geen komma of aanhalingsteken bevatten.' 'error'; return }
+
+    $batch = $null
+    if ($rbHWIDBulk.IsChecked) {
+        $batch = ($txtHWIDBatch.Text.Trim() -replace '[\\/:*?"<>|]', '_')
+        if (-not $batch) { Write-Console 'Vul een batchnaam in voor de bulk-export.' 'error'; $txtHWIDBatch.Focus() | Out-Null; return }
+    }
+
+    $btnHWID.IsEnabled = $false
+    $modus = if ($batch) { "bulk, batch '$batch'" } else { 'per apparaat' }
+    Write-Console "HWID export gestart ($modus, group tag '$tag')... bestelbon gaat naar de keuken." 'start'
+
+    Start-EOOJob -Key 'HWID' -ArgumentList @($script:afStorageAccount, $script:afShareName, $script:afKey, $tag, $batch) -ScriptBlock {
+        param($sa, $sn, $k, $groupTag, $batch)
+        $ErrorActionPreference = 'Stop'
+
+        Write-Output '[1/3] Hardware hash ophalen...'
+        $serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
+        $dev    = Get-CimInstance -Namespace root/cimv2/mdm/dmmap -ClassName MDM_DevDetail_Ext01
+        $hash   = $dev.DeviceHardwareData
+        if (-not $hash) { throw 'Hardware hash niet gevonden.' }
+        Write-Output "    Serienummer: $serial   |   Group tag: $groupTag"
+        $header = 'Device Serial Number,Windows Product ID,Hardware Hash,Group Tag,Assigned User'
+        $line   = "$serial,,$hash,$groupTag,"
+
+        Write-Output '[2/3] Verbinden met Azure Files...'
+        if (-not (Test-Path 'X:\')) {
+            Get-SmbMapping -ErrorAction SilentlyContinue | Where-Object { $_.RemotePath -like "\\$sa.file.core.windows.net\*" } | ForEach-Object {
+                Remove-SmbMapping -LocalPath $_.LocalPath -Force -UpdateProfile -ErrorAction SilentlyContinue
+            }
+            try {
+                New-SmbMapping -LocalPath 'X:' -RemotePath "\\$sa.file.core.windows.net\$sn" -UserName "Azure\$sa" -Password $k -Persistent $false -ErrorAction Stop | Out-Null
+            } catch { throw "Kan Azure Files share niet bereiken. Controleer poort 445. ($_)" }
+        }
+        $dir = 'X:\HWID'
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+
+        Write-Output '[3/3] CSV wegschrijven...'
+        if ($batch) {
+            # Rechtstreeks in de batch-CSV op de share: bestaande regels blijven staan,
+            # een eerdere regel van dit serienummer wordt vervangen.
+            $dest = Join-Path $dir "$batch.csv"
+            $rows = @()
+            $replaced = $false
+            if (Test-Path $dest) {
+                $old  = @(Get-Content -Path $dest | Select-Object -Skip 1 | Where-Object { $_ })
+                $rows = @($old | Where-Object { -not $_.StartsWith("$serial,") })
+                $replaced = $rows.Count -lt $old.Count
+            }
+            Set-Content -Path $dest -Value (@($header) + $rows + $line) -Encoding UTF8
+            $actie = if ($replaced) { 'bijgewerkt in' } else { 'toegevoegd aan' }
+            Write-Output "[OK] Apparaat $actie HWID\$batch.csv ($($rows.Count + 1) apparaten in deze batch)."
+        } else {
+            $dest = Join-Path $dir "$serial.csv"
+            Set-Content -Path $dest -Value @($header, $line) -Encoding UTF8
+            Write-Output "[OK] HWID geupload naar HWID\$serial.csv. Bestelling staat klaar in de keuken."
+        }
+    } -OnOutput {
+        param($line)
+        if ($line -match '^\[OK\]') { Write-Console $line 'ok' } else { Write-Console $line 'info' }
+    } -OnError {
+        param($e) Write-Console "FOUT: $($e.Exception.Message)" 'error'
+    } -OnComplete {
+        param($succeeded, $reason)
+        if (-not $succeeded) { Write-Console "FOUT: $reason (pizza aangebrand)" 'error' }
+        $btnHWID.IsEnabled = $true
+    }
 })
 
 # ── Sectie: Azure opslag ────────────────────────────────────────────
@@ -1385,42 +1431,241 @@ $btnAzureMount.Add_Click({
 })
 
 # ── Sectie: Rapport ─────────────────────────────────────────────────
+# HPIA-resultaat inlezen. Elke HPIA-run schrijft naast de HTML ook:
+#   <model>.xml  -> analyse: categorie, huidige/nieuwe versie, systeeminfo
+#   <model>.json -> uitvoering: per SoftPaq de installatiestatus
+# Beide worden op SoftPaq-ID samengevoegd. Alleen als er geen JSON/XML
+# is, valt de functie terug op tellen in de HTML.
+function Get-XmlText {
+    param($Node, [string]$XPath)
+    if (-not $Node) { return '' }
+    $n = $Node.SelectSingleNode($XPath)
+    if ($n) { return $n.InnerText.Trim() } else { return '' }
+}
+
 function Get-HPIASummary {
     $rapDir = 'C:\HPIAReport'
     if (-not (Test-Path $rapDir)) { return $null }
-    $latest = Get-ChildItem $rapDir -Filter '*.html' -File -ErrorAction SilentlyContinue |
+
+    $jsonFile = Get-ChildItem $rapDir -Filter '*.json' -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $xmlPath = $null
+    if ($jsonFile) {
+        $cand = Join-Path $rapDir ($jsonFile.BaseName + '.xml')
+        if (Test-Path -LiteralPath $cand) { $xmlPath = $cand }
+    } else {
+        $xf = Get-ChildItem $rapDir -Filter '*.xml' -File -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $latest) { return $null }
-    try {
-        $html = [System.IO.File]::ReadAllText($latest.FullName)
-        $text = $html -replace '<[^>]+>', ' ' -replace '&[^;]+;', ' ' -replace '\s+', ' '
-        $counts = [ordered]@{}
-        $passClean   = ([regex]::Matches($html, '(?i)>\s*Pass\s*<')).Count
-        $passRestart = ([regex]::Matches($html, '(?i)>\s*Pass\s+\*\s*<')).Count
-        $failCount   = ([regex]::Matches($html, '(?i)>\s*Fail\s*<')).Count
+        if ($xf) { $xmlPath = $xf.FullName }
+    }
 
-        if (($passClean + $passRestart + $failCount) -gt 0) {
-            $totalPass = $passClean + $passRestart
-            if ($totalPass   -gt 0) { $counts['Geslaagd']         = $totalPass }
-            if ($passRestart -gt 0) { $counts['Herstart vereist'] = $passRestart }
-            if ($failCount   -gt 0) { $counts['Mislukt']          = $failCount }
-        } else {
-            if ($text -match '(?i)Missing\s+Drivers\s+(\d+)') { $counts['Ontbrekende drivers'] = [int]$matches[1] }
-            if ($text -match '(?i)Missing\s+Drivers\s+\d+\s+Out-of-Date\s+(\d+)') { $counts['Verouderde drivers'] = [int]$matches[1] }
-            $spList = [regex]::Matches($text, '(?i)\bsp\d{5,6}\b') | ForEach-Object { $_.Value.ToLower() } | Select-Object -Unique
-            if ($spList.Count -gt 0) { $counts['Aanbevelingen'] = $spList.Count }
-        }
+    $x = $null; $j = $null
+    if ($xmlPath)  { try { $x = [xml](Get-Content -LiteralPath $xmlPath -Raw) } catch {} }
+    if ($jsonFile) { try { $j = (Get-Content -LiteralPath $jsonFile.FullName -Raw | ConvertFrom-Json).HPIA } catch {} }
 
-        $bodyText = $text
-        foreach ($kw in @('Drivers and Software', 'Installation Status', 'Recommendations')) {
-            $pos = $text.IndexOf($kw, [System.StringComparison]::OrdinalIgnoreCase)
-            if ($pos -ge 0) { $bodyText = $text.Substring($pos).Trim(); break }
-        }
+    # ── Terugval: alleen HTML aanwezig ──
+    if (-not $x -and -not $j) {
+        $html = Get-ChildItem $rapDir -Filter '*.html' -File -ErrorAction SilentlyContinue |
+                Sort-Object @{ E = { $_.Name -like 'Readme*' } }, @{ E = { $_.LastWriteTime }; Descending = $true } |
+                Select-Object -First 1
+        if (-not $html) { return $null }
+        $raw = try { [System.IO.File]::ReadAllText($html.FullName) } catch { '' }
+        $passClean   = ([regex]::Matches($raw, '(?i)>\s*Pass\s*<')).Count
+        $passRestart = ([regex]::Matches($raw, '(?i)>\s*Pass\s+\*\s*<')).Count
+        $failCount   = ([regex]::Matches($raw, '(?i)>\s*Fail\s*<')).Count
         return @{
-            File = $latest.Name; Date = $latest.LastWriteTime.ToString('dd-MM-yyyy HH:mm')
-            BodyText = $bodyText; Counts = $counts; HasFail = $failCount -gt 0; Restart = $passRestart -gt 0
+            Source = 'html'; File = $html.Name; Date = $html.LastWriteTime.ToString('dd-MM-yyyy HH:mm')
+            Stale = $html.LastWriteTime -lt (Get-Date).AddDays(-7)
+            ToolVersion = ''; Health = ''; BiosSecurity = ''; Items = @()
+            Counts = [ordered]@{ Total = $passClean + $passRestart + $failCount; Installed = $passClean + $passRestart; Reboot = $passRestart; Failed = $failCount; Open = 0 }
+            Message = "Alleen een HTML-rapport gevonden ($($html.Name)), details per update zijn niet beschikbaar."
         }
-    } catch { return $null }
+    }
+
+    $catNames = @{ Drivers = 'Driver'; Software = 'Software'; Firmware = 'Firmware'; BIOS = 'BIOS'; BIOSSettings = 'BIOS' }
+    $items = [ordered]@{}
+
+    # Analyse (XML): wat is er aanbevolen, met oude en nieuwe versie
+    if ($x) {
+        foreach ($rec in $x.SelectNodes('/HPIA/Recommendations/*/Recommendation')) {
+            $id   = Get-XmlText $rec 'Solution/Softpaq/Id'
+            $key  = if ($id) { $id.ToLower() } else { "x$($items.Count)" }
+            $cat  = $rec.ParentNode.Name
+            $name = Get-XmlText $rec 'Solution/Softpaq/Name'
+            $comp = Get-XmlText $rec 'TargetComponent'
+            $items[$key] = @{
+                Category   = $(if ($catNames.ContainsKey($cat)) { $catNames[$cat] } else { $cat })
+                Name       = $(if ($name) { $name } else { $comp })
+                Component  = $comp
+                SoftPaq    = $id
+                OldVersion = Get-XmlText $rec 'TargetVersion'
+                NewVersion = $(if (Get-XmlText $rec 'ReferenceVersion') { Get-XmlText $rec 'ReferenceVersion' } else { Get-XmlText $rec 'Solution/Softpaq/Version' })
+                Status     = 'Open'
+                Detail     = ''
+            }
+        }
+    }
+
+    # Uitvoering (JSON): per SoftPaq het installatieresultaat
+    if ($j -and $j.Recommendations) {
+        foreach ($rj in @($j.Recommendations)) {
+            $id  = "$($rj.SoftPaqID)"
+            $key = if ($id) { $id.ToLower() } else { "j$($items.Count)" }
+            if (-not $items.Contains($key)) {
+                $items[$key] = @{ Category = '-'; Name = "$($rj.Name)"; Component = ''; SoftPaq = $id
+                                  OldVersion = ''; NewVersion = "$($rj.RecommendationValue)"; Status = 'Open'; Detail = '' }
+            }
+            $it  = $items[$key]
+            $rem = $rj.Remediation
+            if (-not $rem) { continue }
+            $stTxt = "$($rem.Status)"; $rc = "$($rem.ReturnCode)"; $desc = "$($rem.ReturnDescription)"
+            $okRc  = (-not $rc) -or ($rc -in '0', '3010', '1641')
+            if ($stTxt -match 'FAIL|ERROR|CANCEL' -or $desc -match '^(FAIL|ERROR)' -or -not $okRc) { $it.Status = 'Failed' }
+            elseif ($desc -match 'SUCCESS:REBOOT' -or $rc -in '3010', '1641')                       { $it.Status = 'Reboot' }
+            elseif ($stTxt -match 'COMPLETED|SUCCESS|INSTALLED')                                      { $it.Status = 'Installed' }
+            $detail = if ($desc -match '=(.+)$') { $matches[1].Trim() } else { $desc }
+            if (-not $detail) { $detail = $stTxt }
+            if ($it.Status -eq 'Failed' -and $rc) { $detail = "$detail (code $rc)" }
+            $it.Detail = $detail
+        }
+    }
+
+    # Mislukt bovenaan, daarna herstart nodig, niet geinstalleerd, geinstalleerd
+    $prio = @{ Failed = 0; Reboot = 1; Open = 2; Installed = 3 }
+    $list = @($items.Values | Sort-Object @{ E = { $prio[$_.Status] } }, @{ E = { $_.Category } }, @{ E = { $_.Name } })
+
+    $dt = $null
+    if ($j -and $j.LastAnalyzedDate) {
+        if ($j.LastAnalyzedDate -is [datetime]) { $dt = $j.LastAnalyzedDate } else { try { $dt = [datetime]::Parse("$($j.LastAnalyzedDate)") } catch {} }
+    }
+    if (-not $dt) { $dt = if ($jsonFile) { $jsonFile.LastWriteTime } else { (Get-Item -LiteralPath $xmlPath).LastWriteTime } }
+
+    $healthMap = @{ Good = 'Goed'; Warning = 'Waarschuwing'; Critical = 'Kritiek' }
+    $health = Get-XmlText $x '/HPIA/OverallHealth'
+    if ($healthMap.ContainsKey($health)) { $health = $healthMap[$health] }
+    $biosSec = switch ("$($j.BIOSSetupSecurity)") {
+        'BIOS_NOT_PROTECTED' { 'Geen BIOS-wachtwoord ingesteld' }
+        'BIOS_PROTECTED'     { 'BIOS-wachtwoord ingesteld' }
+        default              { '' }
+    }
+
+    $counts = [ordered]@{
+        Total     = $list.Count
+        Installed = @($list | Where-Object { $_.Status -in 'Installed', 'Reboot' }).Count
+        Reboot    = @($list | Where-Object { $_.Status -eq 'Reboot' }).Count
+        Failed    = @($list | Where-Object { $_.Status -eq 'Failed' }).Count
+        Open      = @($list | Where-Object { $_.Status -eq 'Open' }).Count
+    }
+    $msg = if ($list.Count -eq 0) { 'Geen updates nodig: alle drivers, software en firmware zijn up-to-date.' } else { '' }
+
+    return @{
+        Source = 'json'; File = $(if ($jsonFile) { $jsonFile.Name } else { Split-Path $xmlPath -Leaf })
+        Date = $dt.ToString('dd-MM-yyyy HH:mm'); Stale = $dt -lt (Get-Date).AddDays(-7)
+        ToolVersion = Get-XmlText $x '/HPIA/ToolVersion'; Health = $health; BiosSecurity = $biosSec
+        Items = $list; Counts = $counts; Message = $msg
+    }
+}
+
+# ── PDF-tekenhulpjes (GDI+, eenheid = 1/100 inch) ────────────────────
+function ConvertTo-PdfColor { param([string]$Hex, [int]$Alpha = 255) [System.Drawing.Color]::FromArgb($Alpha, [System.Drawing.ColorTranslator]::FromHtml($Hex)) }
+function New-PdfBrush       { param([string]$Hex) New-Object System.Drawing.SolidBrush (ConvertTo-PdfColor $Hex) }
+
+function New-PdfRoundedPath {
+    param([double]$X, [double]$Y, [double]$W, [double]$H, [double]$R)
+    $p  = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $dd = [float][Math]::Min($R * 2, [Math]::Min($W, $H))
+    $p.AddArc([float]$X, [float]$Y, $dd, $dd, [float]180, [float]90)
+    $p.AddArc([float]($X + $W - $dd), [float]$Y, $dd, $dd, [float]270, [float]90)
+    $p.AddArc([float]($X + $W - $dd), [float]($Y + $H - $dd), $dd, $dd, [float]0, [float]90)
+    $p.AddArc([float]$X, [float]($Y + $H - $dd), $dd, $dd, [float]90, [float]90)
+    $p.CloseFigure()
+    return $p
+}
+
+function Add-PdfRoundRect {
+    param($G, $Fill, $Pen, [double]$X, [double]$Y, [double]$W, [double]$H, [double]$R = 6)
+    $path = New-PdfRoundedPath $X $Y $W $H $R
+    if ($Fill) { $G.FillPath($Fill, $path) }
+    if ($Pen)  { $G.DrawPath($Pen, $path) }
+    $path.Dispose()
+}
+
+# Statusicoon als vorm (geen glyph), zodat het niet afhangt van font-fallback
+function Add-PdfStatusIcon {
+    param($G, $Res, [double]$X, [double]$Y, [double]$S, $State)
+    $fill = if ($null -eq $State) { $Res.BIconGray } elseif ($State) { $Res.BIconGreen } else { $Res.BIconRed }
+    $G.FillEllipse($fill, [float]$X, [float]$Y, [float]$S, [float]$S)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, [float]($S * 0.15))
+    $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
+    if ($null -eq $State) {
+        $G.DrawLine($pen, [float]($X + $S * 0.3), [float]($Y + $S * 0.5), [float]($X + $S * 0.7), [float]($Y + $S * 0.5))
+    } elseif ($State) {
+        $G.DrawLines($pen, [System.Drawing.PointF[]]@(
+            [System.Drawing.PointF]::new($X + $S * 0.27, $Y + $S * 0.52),
+            [System.Drawing.PointF]::new($X + $S * 0.44, $Y + $S * 0.68),
+            [System.Drawing.PointF]::new($X + $S * 0.74, $Y + $S * 0.34)))
+    } else {
+        $G.DrawLine($pen, [float]($X + $S * 0.33), [float]($Y + $S * 0.33), [float]($X + $S * 0.67), [float]($Y + $S * 0.67))
+        $G.DrawLine($pen, [float]($X + $S * 0.67), [float]($Y + $S * 0.33), [float]($X + $S * 0.33), [float]($Y + $S * 0.67))
+    }
+    $pen.Dispose()
+}
+
+function Add-PdfSection {
+    param($G, $Res, [string]$Title, [double]$X, [double]$Y)
+    $G.FillRectangle($Res.BAccent, [float]$X, [float]($Y + 3), [float]4, [float]17)
+    $G.DrawString($Title, $Res.FSection, $Res.BDark, [float]($X + 11), [float]$Y)
+    return ($Y + 30)
+}
+
+function Add-PdfPill {
+    param($G, $Res, [string]$Text, $Fg, $Bg, [double]$X, [double]$Y)
+    $sz = $G.MeasureString($Text, $Res.FPill)
+    Add-PdfRoundRect $G $Bg $null $X $Y ($sz.Width + 10) 17 8.5
+    $G.DrawString($Text, $Res.FPill, $Fg, [float]($X + 5), [float]($Y + (17 - $sz.Height) / 2))
+}
+
+function Add-PdfMessageCard {
+    param($G, $Res, [string]$Text, $State, [double]$X, [double]$Y, [double]$W)
+    $bg = if ($null -eq $State) { $Res.BGrayBg } elseif ($State) { $Res.BGreenBg } else { $Res.BRedBg }
+    $h  = [Math]::Max(40, $G.MeasureString($Text, $Res.FBody, [int]($W - 60)).Height + 22)
+    Add-PdfRoundRect $G $bg $null $X $Y $W $h 8
+    Add-PdfStatusIcon $G $Res ($X + 14) ($Y + ($h - 18) / 2) 18 $State
+    $G.DrawString($Text, $Res.FBody, $Res.BText, [System.Drawing.RectangleF]::new($X + 42, $Y + 11, $W - 56, $h - 16))
+    return ($Y + $h)
+}
+
+$script:pdfStatusInfo = @{
+    Installed = @{ Label = 'Geinstalleerd';      Fg = 'BGreen'; Bg = 'BGreenBg' }
+    Reboot    = @{ Label = 'Herstart nodig';     Fg = 'BAmber'; Bg = 'BAmberBg' }
+    Failed    = @{ Label = 'Mislukt';            Fg = 'BRed';   Bg = 'BRedBg' }
+    Open      = @{ Label = 'Niet geinstalleerd'; Fg = 'BGray';  Bg = 'BGrayBg' }
+}
+
+function New-PdfResources {
+    $f = { param($size, $style = 'Regular') New-Object System.Drawing.Font('Segoe UI', [float]$size, [System.Drawing.FontStyle]$style) }
+    $sfEll = New-Object System.Drawing.StringFormat
+    $sfEll.Trimming = 'EllipsisCharacter'; $sfEll.FormatFlags = 'NoWrap'
+    $sfRight = New-Object System.Drawing.StringFormat
+    $sfRight.Alignment = 'Far'
+    $sfCenter = New-Object System.Drawing.StringFormat
+    $sfCenter.Alignment = 'Center'; $sfCenter.LineAlignment = 'Center'
+    return @{
+        FTitle = (& $f 20 'Bold'); FHeadSub = (& $f 9.5); FBadge = (& $f 8.5 'Bold'); FSection = (& $f 12 'Bold')
+        FLabel = (& $f 7); FValue = (& $f 9.5 'Bold'); FBody = (& $f 9); FBodyB = (& $f 9 'Bold')
+        FSmall = (& $f 8); FSmallI = (& $f 8 'Italic'); FTileNum = (& $f 22 'Bold'); FTileLbl = (& $f 8); FPill = (& $f 7.5 'Bold')
+        FHead  = (& $f 7.5 'Bold')
+        BWhite = (New-PdfBrush '#FFFFFF'); BDark = (New-PdfBrush '#03173D'); BAccent = (New-PdfBrush '#208AD0'); BLight = (New-PdfBrush '#60BEF0')
+        BText  = (New-PdfBrush '#111827'); BSub  = (New-PdfBrush '#6B7280'); BHeadSub = (New-PdfBrush '#CBD5E1')
+        BGreen = (New-PdfBrush '#15803D'); BGreenBg = (New-PdfBrush '#DCFCE7')
+        BRed   = (New-PdfBrush '#B91C1C'); BRedBg   = (New-PdfBrush '#FEE2E2')
+        BAmber = (New-PdfBrush '#B45309'); BAmberBg = (New-PdfBrush '#FEF3C7')
+        BGray  = (New-PdfBrush '#4B5563'); BGrayBg  = (New-PdfBrush '#F1F5F9')
+        BBlueBg = (New-PdfBrush '#E0F0FA'); BCard = (New-PdfBrush '#F8FAFC'); BZebra = (New-PdfBrush '#F8FAFC')
+        BIconGreen = (New-PdfBrush '#16A34A'); BIconRed = (New-PdfBrush '#DC2626'); BIconGray = (New-PdfBrush '#9CA3AF')
+        PBorder = (New-Object System.Drawing.Pen((ConvertTo-PdfColor '#E2E8F0'), [float]1))
+        SfEllipsis = $sfEll; SfRight = $sfRight; SfCenter = $sfCenter
+    }
 }
 
 function Export-RapportPDF {
@@ -1437,111 +1682,276 @@ function Export-RapportPDF {
         return
     }
 
+    $cs   = try { Get-CimInstance Win32_ComputerSystem } catch { $null }
+    $bios = try { Get-CimInstance Win32_BIOS } catch { $null }
+    $hpia = Get-HPIASummary
+    $isHP = "$($cs.Manufacturer)" -match 'HP|Hewlett'
+    $hpiaFailed = if ($hpia) { $hpia.Counts.Failed } else { 0 }
+    $laptopTxt  = $script:infoRowMap['Laptop'].Label.Text -replace '^Apparaattype:\s*', ''
+
     $script:_pdfData = @{
-        Serial = $serial; Computer = $env:COMPUTERNAME; Date = Get-Date -Format 'dd-MM-yyyy HH:mm:ss'
-        Version = $script:currentVersion; Logo = $script:logoImageGdi
-        Checks = @(
-            @{ Label = $script:infoRowMap['ActiveKey'].Label.Text;   OK = $null }
+        Serial = $serial; Computer = $env:COMPUTERNAME; Date = Get-Date -Format 'dd-MM-yyyy HH:mm'
+        Version = "v$script:currentVersion - $script:versionName"; Logo = $script:logoImageGdi
+        Device = @(
+            @{ K = 'Computernaam'; V = $env:COMPUTERNAME }
+            @{ K = 'Serienummer';  V = $serial }
+            @{ K = 'Fabrikant';    V = "$($cs.Manufacturer)" }
+            @{ K = 'Model';        V = "$($cs.Model)" }
+            @{ K = 'Windows';      V = $script:infoRowMap['Windows'].Label.Text }
+            @{ K = 'BIOS-versie';  V = "$($bios.SMBIOSBIOSVersion)" }
+            @{ K = 'Geheugen';     V = $(try { '{0:N0} GB' -f ((Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1GB) } catch { '-' }) }
+            @{ K = 'Apparaattype'; V = $laptopTxt }
+        )
+        Keys = @(
+            @{ Label = $script:infoRowMap['ActiveKey'].Label.Text;   OK = $script:okActivation }
             @{ Label = $script:infoRowMap['OemKey'].Label.Text;      OK = $null }
             @{ Label = $script:infoRowMap['CompliesKey'].Label.Text; OK = $null }
-            @{ Label = $script:infoRowMap['Windows'].Label.Text;     OK = $null }
-            @{ Label = $script:infoRowMap['Activatie'].Label.Text;   OK = $script:okActivation }
-            @{ Label = $script:infoRowMap['Tpm'].Label.Text;         OK = $script:okTpm }
-            @{ Label = $script:infoRowMap['SecureBoot'].Label.Text;  OK = $script:okSecureBoot }
-            @{ Label = $script:infoRowMap['Internet'].Label.Text;    OK = $script:okInternet }
-            @{ Label = $script:infoRowMap['HP'].Label.Text;          OK = ($script:hpBloatFound.Count -eq 0) }
-            @{ Label = $script:infoRowMap['Laptop'].Label.Text;      OK = $null }
-            @{ Label = $script:infoRowMap['Wifi'].Label.Text;        OK = $script:okWifi }
-            @{ Label = $script:infoRowMap['Serienummer'].Label.Text; OK = $null }
         )
-        Bloat = @($script:hpBloatFound); HPIA = (Get-HPIASummary)
+        Checks = @(
+            @{ Label = $script:infoRowMap['Activatie'].Label.Text;  OK = $script:okActivation }
+            @{ Label = $script:infoRowMap['Tpm'].Label.Text;        OK = $script:okTpm }
+            @{ Label = $script:infoRowMap['SecureBoot'].Label.Text; OK = $script:okSecureBoot }
+            @{ Label = $script:infoRowMap['Internet'].Label.Text;   OK = $script:okInternet }
+            @{ Label = $script:infoRowMap['Wifi'].Label.Text;       OK = $script:okWifi }
+            @{ Label = $script:infoRowMap['HP'].Label.Text;         OK = ($script:hpBloatFound.Count -eq 0) }
+        )
+        Bloat = @($script:hpBloatFound); HPIA = $hpia; IsHP = $isHP
+        AllOk = ($script:okActivation -and $script:okTpm -and $script:okSecureBoot -and $script:okInternet -and $hpiaFailed -eq 0)
     }
+    $script:_pdfRes   = New-PdfResources
+    $script:_pdfState = @{ Page = 0; RowIdx = 0; Done = $false }
 
     $pd = New-Object System.Drawing.Printing.PrintDocument
     $pd.PrinterSettings.PrinterName   = 'Microsoft Print to PDF'
     $pd.PrinterSettings.PrintToFile   = $true
     $pd.PrinterSettings.PrintFileName = $outputPath
+    $a4 = $pd.PrinterSettings.PaperSizes | Where-Object { $_.Kind -eq 'A4' } | Select-Object -First 1
+    if ($a4) { $pd.DefaultPageSettings.PaperSize = $a4 }
 
     $pd.Add_PrintPage({
         param($s2, $ev)
         $d  = $script:_pdfData
+        $r  = $script:_pdfRes
+        $st = $script:_pdfState
         $g  = $ev.Graphics
-        $lm = [float]$ev.MarginBounds.Left
-        $tm = [float]$ev.MarginBounds.Top
-        $pw = [float]$ev.MarginBounds.Width
+        $g.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
 
-        $fTitle = New-Object System.Drawing.Font('Arial', 16, [System.Drawing.FontStyle]::Bold)
-        $fSub = New-Object System.Drawing.Font('Arial', 10, [System.Drawing.FontStyle]::Italic)
-        $fSection = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
-        $fCheck = New-Object System.Drawing.Font('Arial', 10)
-        $fSmall = New-Object System.Drawing.Font('Arial', 9)
+        $dot    = [char]0x00B7
+        $arrow  = [char]0x2192
+        $pageW  = [double]$ev.PageBounds.Width
+        $pageH  = [double]$ev.PageBounds.Height
+        $L      = 45.0
+        $W      = $pageW - 90
+        $Rx     = $L + $W
+        $bottom = $pageH - 60
+        $hasMore = $false
+        $st.Page++
+        $items = @(if ($d.HPIA) { $d.HPIA.Items })
 
-        $bBlack = [System.Drawing.Brushes]::Black
-        $bGreen = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 0))
-        $bRed = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(192, 0, 0))
-        $bGray = [System.Drawing.Brushes]::DimGray
-        $bTeal = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(0, 128, 128))
-        $penLine = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 128, 128), 2)
-
-        $y = $tm
-        if ($null -ne $d.Logo) {
-            $logoH = [int]48
-            $logoW = [int]($d.Logo.Width * $logoH / $d.Logo.Height)
-            $logoX = [int]($lm + $pw - $logoW)
-            $g.DrawImage($d.Logo, (New-Object System.Drawing.Rectangle($logoX, [int]$tm, $logoW, $logoH)))
-        }
-
-        $g.DrawString('EOO Windows Installatie Rapport', $fTitle, $bTeal, $lm, $y); $y += 34
-        $g.DrawString("Datum: $($d.Date)", $fSub, $bGray, $lm, $y); $y += 20
-        $g.DrawString("Computer: $($d.Computer)   |   Serienummer: $($d.Serial)", $fSub, $bGray, $lm, $y); $y += 28
-        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y); $y += 16
-        $g.DrawString('Systeemcontroles', $fSection, $bBlack, $lm, $y); $y += 28
-
-        foreach ($chk in $d.Checks) {
-            if ($null -eq $chk.OK) {
-                $g.DrawString("$([char]0x25CF)  $($chk.Label)", $fCheck, $bGray, $lm, $y)
-            } elseif ($chk.OK) {
-                $g.DrawString("$([char]0x2713)  $($chk.Label)", $fCheck, $bGreen, $lm, $y)
+        if ($st.Page -eq 1) {
+            # ── Kop: verloop in huisstijl met wit logovlak (zelfde vorm als de GUI) ──
+            $hH = 112.0
+            $grad = New-Object System.Drawing.Drawing2D.LinearGradientBrush([System.Drawing.RectangleF]::new(0, 0, $pageW, $hH), (ConvertTo-PdfColor '#208AD0'), (ConvertTo-PdfColor '#03173D'), [single]0)
+            $g.FillRectangle($grad, [float]0, [float]0, [float]$pageW, [float]$hH)
+            $grad.Dispose()
+            $g.FillPolygon($r.BWhite, [System.Drawing.PointF[]]@(
+                [System.Drawing.PointF]::new(0, 0), [System.Drawing.PointF]::new(250, 0),
+                [System.Drawing.PointF]::new(215, $hH), [System.Drawing.PointF]::new(0, $hH)))
+            $g.FillPolygon($r.BLight, [System.Drawing.PointF[]]@(
+                [System.Drawing.PointF]::new(256, 0), [System.Drawing.PointF]::new(264, 0),
+                [System.Drawing.PointF]::new(229, $hH), [System.Drawing.PointF]::new(221, $hH)))
+            if ($null -ne $d.Logo) {
+                $ratio = [Math]::Min(185 / $d.Logo.Width, ($hH - 30) / $d.Logo.Height)
+                $lw = $d.Logo.Width * $ratio; $lh = $d.Logo.Height * $ratio
+                $g.DrawImage($d.Logo, [System.Drawing.RectangleF]::new(18, ($hH - $lh) / 2, $lw, $lh))
             } else {
-                $g.DrawString("$([char]0x2717)  $($chk.Label)", $fCheck, $bRed, $lm, $y)
+                $g.DrawString('EOO', $r.FTitle, $r.BDark, [float]30, [float]38)
             }
-            $y += 22
-        }
+            $tx = 282.0
+            $g.DrawString('Installatierapport', $r.FTitle, $r.BWhite, [float]$tx, [float]20)
+            $g.DrawString("$($d.Computer)   $dot   Serienummer $($d.Serial)", $r.FHeadSub, $r.BWhite, [float]$tx, [float]58)
+            $g.DrawString("Gemaakt op $($d.Date)", $r.FHeadSub, $r.BHeadSub, [float]$tx, [float]76)
 
-        if ($d.Bloat.Count -gt 0) {
+            $badge = if ($d.AllOk) { 'GEREED' } else { 'AANDACHT NODIG' }
+            $bsz = $g.MeasureString($badge, $r.FBadge)
+            $bw = $bsz.Width + 24; $bx = $Rx - $bw
+            Add-PdfRoundRect $g $(if ($d.AllOk) { $r.BIconGreen } else { $r.BIconRed }) $null $bx 24 $bw 26 13
+            $g.DrawString($badge, $r.FBadge, $r.BWhite, [System.Drawing.RectangleF]::new($bx, 24, $bw, 26), $r.SfCenter)
+
+            $y = $hH + 24
+
+            # ── Apparaat ──
+            $y = Add-PdfSection $g $r 'Apparaat' $L $y
+            $rowsN = [Math]::Ceiling($d.Device.Count / 2)
+            $cardH = $rowsN * 36 + 14
+            Add-PdfRoundRect $g $r.BCard $r.PBorder $L $y $W $cardH 8
+            $colW = ($W - 32) / 2
+            for ($i = 0; $i -lt $d.Device.Count; $i++) {
+                $cx = $L + 16 + ($i % 2) * $colW
+                $cy = $y + 9 + [Math]::Floor($i / 2) * 36
+                $g.DrawString($d.Device[$i].K.ToUpper(), $r.FLabel, $r.BSub, [float]$cx, [float]$cy)
+                $val = if ($d.Device[$i].V) { $d.Device[$i].V } else { '-' }
+                $g.DrawString($val, $r.FValue, $r.BText, [System.Drawing.RectangleF]::new($cx, $cy + 12, $colW - 12, 18), $r.SfEllipsis)
+            }
+            $y += $cardH + 20
+
+            # ── Licentie ──
+            $y = Add-PdfSection $g $r 'Licentie' $L $y
+            $cardH = $d.Keys.Count * 24 + 12
+            Add-PdfRoundRect $g $r.BCard $r.PBorder $L $y $W $cardH 8
+            $ky = $y + 9
+            foreach ($k in $d.Keys) {
+                Add-PdfStatusIcon $g $r ($L + 16) ($ky + 1) 14 $k.OK
+                $g.DrawString($k.Label, $r.FBody, $r.BText, [System.Drawing.RectangleF]::new($L + 40, $ky, $W - 56, 18), $r.SfEllipsis)
+                $ky += 24
+            }
+            $y += $cardH + 20
+
+            # ── Systeemcontroles (2 kolommen) ──
+            $y = Add-PdfSection $g $r 'Systeemcontroles' $L $y
+            $rowsN = [Math]::Ceiling($d.Checks.Count / 2)
+            $cardH = $rowsN * 26 + 12
+            Add-PdfRoundRect $g $r.BCard $r.PBorder $L $y $W $cardH 8
+            for ($i = 0; $i -lt $d.Checks.Count; $i++) {
+                $cx = $L + 16 + ($i % 2) * $colW
+                $cy = $y + 10 + [Math]::Floor($i / 2) * 26
+                Add-PdfStatusIcon $g $r $cx ($cy + 1) 14 $d.Checks[$i].OK
+                $g.DrawString($d.Checks[$i].Label, $r.FBody, $r.BText, [System.Drawing.RectangleF]::new($cx + 22, $cy, $colW - 34, 18), $r.SfEllipsis)
+            }
+            $y += $cardH + 12
+
+            # ── HP bloatware (alleen als er iets gevonden is) ──
+            if ($d.Bloat.Count -gt 0) {
+                $rowsN = [Math]::Ceiling($d.Bloat.Count / 2)
+                $cardH = 30 + $rowsN * 16 + 8
+                Add-PdfRoundRect $g $r.BRedBg $null $L $y $W $cardH 8
+                $g.DrawString("HP bloatware gevonden ($($d.Bloat.Count))", $r.FBodyB, $r.BRed, [float]($L + 16), [float]($y + 9))
+                for ($i = 0; $i -lt $d.Bloat.Count; $i++) {
+                    $cx = $L + 16 + ($i % 2) * $colW
+                    $cy = $y + 30 + [Math]::Floor($i / 2) * 16
+                    $g.DrawString("$dot  $($d.Bloat[$i])", $r.FSmall, $r.BText, [System.Drawing.RectangleF]::new($cx, $cy, $colW - 12, 16), $r.SfEllipsis)
+                }
+                $y += $cardH + 12
+            }
             $y += 8
-            foreach ($item in $d.Bloat) { $g.DrawString("     - $item", $fSmall, $bRed, $lm, $y); $y += 18 }
-        }
 
-        $y += 20
-        $g.DrawLine($penLine, $lm, $y, ($lm + $pw), $y); $y += 14
-        $g.DrawString('HP Image Assistant', $fSection, $bBlack, $lm, $y); $y += 24
-
-        if ($null -ne $d.HPIA) {
-            $g.DrawString("Rapport: $($d.HPIA.File)   |   $($d.HPIA.Date)", $fSmall, $bGray, $lm, $y); $y += 16
-            if ($d.HPIA.BodyText) {
-                $footerTopY = [float]$ev.MarginBounds.Bottom - 24
-                $availH = [Math]::Max(10, $footerTopY - $y - 4)
-                $sf = New-Object System.Drawing.StringFormat
-                $sf.Trimming = [System.Drawing.StringTrimming]::Word
-                $g.DrawString($d.HPIA.BodyText, $fSmall, $bBlack, [System.Drawing.RectangleF]::new($lm, $y, $pw, $availH), $sf)
-                $sf.Dispose()
+            # ── Drivers en updates (HPIA) ──
+            $y = Add-PdfSection $g $r 'Drivers en updates (HP Image Assistant)' $L $y
+            $h = $d.HPIA
+            if (-not $h) {
+                if ($d.IsHP) {
+                    $y = Add-PdfMessageCard $g $r 'Geen HPIA-rapport gevonden. HP Image Assistant is op dit apparaat nog niet gedraaid.' $false $L $y $W
+                } else {
+                    $y = Add-PdfMessageCard $g $r 'Niet van toepassing: dit is geen HP-apparaat.' $null $L $y $W
+                }
+                $st.Done = $true
             } else {
-                $g.DrawString('Geen inhoud gevonden in rapport.', $fSmall, $bGray, $lm, $y)
+                $meta = @("Laatste analyse: $($h.Date)")
+                if ($h.ToolVersion)  { $meta += "HPIA $($h.ToolVersion)" }
+                if ($h.Health)       { $meta += "Algemene status: $($h.Health)" }
+                if ($h.BiosSecurity) { $meta += $h.BiosSecurity }
+                $g.DrawString(($meta -join "   $dot   "), $r.FSmall, $r.BSub, [System.Drawing.RectangleF]::new($L, $y - 4, $W, 16), $r.SfEllipsis)
+                $y += 14
+                if ($h.Stale) {
+                    $g.DrawString('Let op: dit HPIA-rapport is ouder dan 7 dagen.', $r.FSmall, $r.BRed, [float]$L, [float]$y)
+                    $y += 14
+                }
+                $y += 6
+
+                # Tegels met aantallen
+                $c = $h.Counts
+                $tiles = @(
+                    @{ N = $c.Total;     L = 'Aanbevolen';         Fg = $r.BDark;  Bg = $r.BBlueBg }
+                    @{ N = $c.Installed; L = 'Geinstalleerd';      Fg = $r.BGreen; Bg = $r.BGreenBg }
+                    @{ N = $c.Reboot;    L = 'Herstart nodig';     Fg = $r.BAmber; Bg = $r.BAmberBg }
+                    @{ N = $c.Failed;    L = 'Mislukt';            Fg = $r.BRed;   Bg = $r.BRedBg }
+                    @{ N = $c.Open;      L = 'Niet geinstalleerd'; Fg = $r.BGray;  Bg = $r.BGrayBg }
+                )
+                $gap = 10.0; $tw = ($W - 4 * $gap) / 5; $th = 64.0
+                for ($i = 0; $i -lt $tiles.Count; $i++) {
+                    $t  = $tiles[$i]
+                    $tx2 = $L + $i * ($tw + $gap)
+                    Add-PdfRoundRect $g $t.Bg $null $tx2 $y $tw $th 8
+                    $g.DrawString("$($t.N)", $r.FTileNum, $t.Fg, [System.Drawing.RectangleF]::new($tx2, $y + 4, $tw, 38), $r.SfCenter)
+                    $g.DrawString($t.L, $r.FTileLbl, $r.BGray, [System.Drawing.RectangleF]::new($tx2, $y + 40, $tw, 18), $r.SfCenter)
+                }
+                $y += $th + 16
+
+                if ($items.Count -eq 0) {
+                    $state = if ($h.Source -eq 'html') { $null } else { $true }
+                    $y = Add-PdfMessageCard $g $r $h.Message $state $L $y $W
+                    $st.Done = $true
+                } elseif ($c.Reboot -gt 0) {
+                    $y = Add-PdfMessageCard $g $r 'Herstart het apparaat om de updates met status "Herstart nodig" af te ronden.' $null $L $y $W
+                    $y += 12
+                }
             }
         } else {
-            $fBig = New-Object System.Drawing.Font('Arial', 11, [System.Drawing.FontStyle]::Bold)
-            $g.DrawString("$([char]0x26A0)  GEEN HPIA-RAPPORT GEVONDEN — HP Image Assistant is mogelijk niet gedraaid.", $fBig, $bRed, $lm, $y)
-            $fBig.Dispose()
+            # ── Vervolgpagina: smalle kopbalk ──
+            $grad = New-Object System.Drawing.Drawing2D.LinearGradientBrush([System.Drawing.RectangleF]::new(0, 0, $pageW, 40), (ConvertTo-PdfColor '#208AD0'), (ConvertTo-PdfColor '#03173D'), [single]0)
+            $g.FillRectangle($grad, [float]0, [float]0, [float]$pageW, [float]40)
+            $grad.Dispose()
+            $g.DrawString("Installatierapport   $dot   $($d.Computer)   $dot   Serienummer $($d.Serial)", $r.FBodyB, $r.BWhite, [float]$L, [float]12)
+            $y = 64.0
+            $y = Add-PdfSection $g $r 'Drivers en updates (vervolg)' $L $y
         }
 
-        $fy = [float]$ev.MarginBounds.Bottom - 22
-        $g.DrawLine($penLine, $lm, $fy, ($lm + $pw), $fy); $fy += 10
-        $g.DrawString("Gegenereerd door EOO Windows Installatie Tool v$($d.Version)", $fSmall, $bGray, $lm, $fy)
+        # ── Tabel met updates (loopt door over meerdere pagina's) ──
+        if (-not $st.Done -and $items.Count -gt 0) {
+            if ($bottom - $y -lt 80) {
+                $hasMore = $true
+            } else {
+                $xStatus = $L + 8; $xCat = $L + 124; $xName = $L + 192; $xVer = $Rx - 150
+                $nameW = $xVer - $xName - 12
+                Add-PdfRoundRect $g $r.BDark $null $L $y $W 24 6
+                $g.DrawString('STATUS',    $r.FHead, $r.BWhite, [float]$xStatus, [float]($y + 6))
+                $g.DrawString('CATEGORIE', $r.FHead, $r.BWhite, [float]$xCat,    [float]($y + 6))
+                $g.DrawString('ONDERDEEL', $r.FHead, $r.BWhite, [float]$xName,   [float]($y + 6))
+                $g.DrawString('VERSIE (OUD ' + $arrow + ' NIEUW)', $r.FHead, $r.BWhite, [float]$xVer, [float]($y + 6))
+                $y += 26
+                $first = $true
+                while ($st.RowIdx -lt $items.Count) {
+                    $it  = $items[$st.RowIdx]
+                    $sub = (@($it.SoftPaq, $it.Component) | Where-Object { $_ -and $_ -ne $it.Name }) -join "   $dot   "
+                    $hName = $g.MeasureString($it.Name, $r.FBodyB, [int]$nameW).Height
+                    $hSub  = if ($sub)       { $g.MeasureString($sub, $r.FSmall, [int]$nameW).Height } else { 0 }
+                    $hDet  = if ($it.Detail) { $g.MeasureString($it.Detail, $r.FSmallI, [int]$nameW).Height } else { 0 }
+                    $rowH  = [Math]::Max(38, $hName + $hSub + $hDet + 14)
+                    if (($y + $rowH -gt $bottom) -and -not $first) { break }
 
-        $penLine.Dispose(); $bGreen.Dispose(); $bRed.Dispose(); $bTeal.Dispose()
-        $fTitle.Dispose(); $fSub.Dispose(); $fSection.Dispose(); $fCheck.Dispose(); $fSmall.Dispose()
-        $ev.HasMorePages = $false
+                    if ($st.RowIdx % 2 -eq 1) { $g.FillRectangle($r.BZebra, [float]$L, [float]$y, [float]$W, [float]$rowH) }
+                    $info = $script:pdfStatusInfo[$it.Status]
+                    Add-PdfPill $g $r $info.Label $r[$info.Fg] $r[$info.Bg] $xStatus ($y + 9)
+                    $g.DrawString($it.Category, $r.FBody, $r.BText, [float]$xCat, [float]($y + 9))
+
+                    $ty = $y + 7
+                    $g.DrawString($it.Name, $r.FBodyB, $r.BText, [System.Drawing.RectangleF]::new($xName, $ty, $nameW, $hName + 2)); $ty += $hName
+                    if ($sub)       { $g.DrawString($sub, $r.FSmall, $r.BSub, [System.Drawing.RectangleF]::new($xName, $ty, $nameW, $hSub + 2)); $ty += $hSub }
+                    if ($it.Detail) { $g.DrawString($it.Detail, $r.FSmallI, $(if ($it.Status -eq 'Failed') { $r.BRed } else { $r.BSub }), [System.Drawing.RectangleF]::new($xName, $ty, $nameW, $hDet + 2)) }
+
+                    if ($it.OldVersion) {
+                        $g.DrawString($it.OldVersion, $r.FSmall, $r.BSub, [float]$xVer, [float]($y + 7))
+                        $g.DrawString("$arrow $($it.NewVersion)", $r.FBodyB, $r.BText, [float]$xVer, [float]($y + 20))
+                    } elseif ($it.NewVersion) {
+                        $g.DrawString($it.NewVersion, $r.FBodyB, $r.BText, [float]$xVer, [float]($y + 9))
+                    }
+                    $g.DrawLine($r.PBorder, [float]$L, [float]($y + $rowH), [float]$Rx, [float]($y + $rowH))
+                    $y += $rowH
+                    $st.RowIdx++
+                    $first = $false
+                }
+                $hasMore = $st.RowIdx -lt $items.Count
+            }
+        }
+
+        # ── Voettekst ──
+        $fy = $pageH - 44
+        $g.DrawLine($r.PBorder, [float]$L, [float]$fy, [float]$Rx, [float]$fy)
+        $g.DrawString("Gegenereerd door EOO Windows Installatie Tool $($d.Version)   $dot   Easy Office Online   $dot   eoo.nl", $r.FSmall, $r.BSub, [float]$L, [float]($fy + 7))
+        $g.DrawString("Pagina $($st.Page)", $r.FSmall, $r.BSub, [System.Drawing.RectangleF]::new($L, $fy + 7, $W, 16), $r.SfRight)
+
+        $ev.HasMorePages = $hasMore
     })
 
     try {
@@ -1581,7 +1991,8 @@ function Export-RapportPDF {
         $btnExportPDF.IsEnabled = $true
     } finally {
         $pd.Dispose()
-        $script:_pdfData = $null
+        if ($script:_pdfRes) { foreach ($v in $script:_pdfRes.Values) { try { $v.Dispose() } catch {} } }
+        $script:_pdfData = $null; $script:_pdfRes = $null; $script:_pdfState = $null
     }
 }
 
